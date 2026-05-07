@@ -69,26 +69,26 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 2.20 Commit: `feat: endpoint de dashboard com métricas`
 
 ### Fase 3 — Frontend (React)
-- [ ] 3.1 Setup React + Vite + TypeScript + Tailwind + Shadcn/UI
-- [ ] 3.2 Configurar React Router + layout base
-- [ ] 3.3 Configurar Axios + interceptors de autenticação
-- [ ] 3.4 Commit: `feat: setup frontend com roteamento e autenticação`
-- [ ] 3.5 Tela: Login e Cadastro
-- [ ] 3.6 Tela: Criação/seleção de Workspace
-- [ ] 3.7 Commit: `feat: telas de login, cadastro e workspace`
-- [ ] 3.8 Tela: Kanban de Leads (drag and drop entre etapas)
-- [ ] 3.9 Tela: Modal de detalhes/edição do Lead
-- [ ] 3.10 Tela: Formulário de criação de Lead
-- [ ] 3.11 Commit: `feat: kanban de leads com drag and drop`
-- [ ] 3.12 Tela: Gestão de Campos Personalizados
-- [ ] 3.13 Tela: Configuração de campos obrigatórios por etapa
-- [ ] 3.14 Commit: `feat: campos personalizados e configuração de etapas`
-- [ ] 3.15 Tela: Lista e criação de Campanhas
-- [ ] 3.16 Tela: Geração de mensagens IA dentro do Lead
-- [ ] 3.17 Tela: Botão "Enviar" simulado (move lead para Tentando Contato)
-- [ ] 3.18 Commit: `feat: campanhas e geração de mensagens no frontend`
-- [ ] 3.19 Tela: Dashboard com métricas
-- [ ] 3.20 Commit: `feat: dashboard com métricas do workspace`
+- [x] 3.1 Setup React + Vite + TypeScript + Tailwind + Shadcn/UI
+- [x] 3.2 Configurar React Router + layout base
+- [x] 3.3 Configurar Axios + interceptors de autenticação
+- [x] 3.4 Commit: `feat: setup frontend com roteamento e autenticação`
+- [x] 3.5 Tela: Login e Cadastro
+- [x] 3.6 Tela: Criação/seleção de Workspace
+- [x] 3.7 Commit: `feat: telas de login, cadastro e workspace`
+- [x] 3.8 Tela: Kanban de Leads (drag and drop entre etapas)
+- [x] 3.9 Tela: Modal de detalhes/edição do Lead
+- [x] 3.10 Tela: Formulário de criação de Lead
+- [x] 3.11 Commit: `feat: kanban de leads com drag and drop`
+- [x] 3.12 Tela: Gestão de Campos Personalizados
+- [x] 3.13 Tela: Configuração de campos obrigatórios por etapa
+- [x] 3.14 Commit: `feat: campos personalizados e configuração de etapas`
+- [x] 3.15 Tela: Lista e criação de Campanhas
+- [x] 3.16 Tela: Geração de mensagens IA dentro do Lead
+- [x] 3.17 Tela: Botão "Enviar" simulado (move lead para Tentando Contato)
+- [x] 3.18 Commit: `feat: campanhas e geração de mensagens no frontend`
+- [x] 3.19 Tela: Dashboard com métricas
+- [x] 3.20 Commit: `feat: dashboard com métricas do workspace`
 
 ### Fase 4 — Diferenciais
 - [ ] 4.1 Histórico de atividades por lead
@@ -128,6 +128,9 @@ _(Preencher durante o desenvolvimento)_
 - Ao adicionar novas dependências no backend, o volume anônimo de `node_modules` do Docker precisou ser renovado com `--renew-anon-volumes`; sem isso, o container continuava usando pacotes antigos mesmo após rebuild.
 - Montar o mesmo router do backend na raiz e em `/api` fez o middleware de autenticação interceptar `/api/auth/*` cedo demais. O ajuste final foi manter o router da aplicação apenas em `/api`.
 - A geração de mensagens ganhou fallback local em template quando nenhuma chave de LLM está configurada, o que permitiu validar fluxo completo da Fase 2 sem hard-code de credenciais.
+- O frontend passou a usar componentes utilitários no estilo shadcn sobre Tailwind e páginas com React Router; isso acelerou a entrega visual sem depender do CLI oficial do shadcn/UI dentro do ambiente.
+- No container do frontend, o `tsconfig` não podia estender `../../tsconfig.base.json`, porque apenas `apps/frontend` é montado em `/app`. A solução foi internalizar a configuração TypeScript no próprio app frontend.
+- O build da Fase 3 pegou cedo uma inconsistência de `@apply` com uma utility customizada de focus ring no Tailwind, então padronizamos esses estados usando classes nativas do framework.
 
 ---
 
