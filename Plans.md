@@ -29,22 +29,22 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 0.3 Configurar Docker Compose (frontend + backend + postgres)
 - [x] 0.4 Configurar variáveis de ambiente (.env)
 - [x] 0.5 Validar que tudo sobe com `docker compose up`
-- [ ] 0.6 Commit: `chore: setup inicial do projeto com Docker`
+- [x] 0.6 Commit: `chore: setup inicial do projeto com Docker`
 
 ### Fase 1 — Banco de Dados (Migrations)
-- [ ] 1.1 Migration: tabela `workspaces`
-- [ ] 1.2 Migration: tabela `users` + relação com workspaces
-- [ ] 1.3 Migration: tabela `workspace_members` (multi-workspace)
-- [ ] 1.4 Migration: tabela `leads` (campos padrão)
-- [ ] 1.5 Migration: tabela `custom_fields` (campos personalizados por workspace)
-- [ ] 1.6 Migration: tabela `lead_custom_values` (valores dos campos personalizados)
-- [ ] 1.7 Migration: tabela `funnel_stages` (etapas do funil)
-- [ ] 1.8 Migration: tabela `stage_required_fields` (campos obrigatórios por etapa)
-- [ ] 1.9 Migration: tabela `campaigns` (campanhas de abordagem)
-- [ ] 1.10 Migration: tabela `generated_messages` (mensagens geradas pela IA)
-- [ ] 1.11 Migration: tabela `activity_logs` (histórico de atividades)
-- [ ] 1.12 Seed: etapas padrão do funil
-- [ ] 1.13 Commit: `feat: migrations e seed do banco de dados`
+- [x] 1.1 Migration: tabela `workspaces`
+- [x] 1.2 Migration: tabela `users` + relação com workspaces
+- [x] 1.3 Migration: tabela `workspace_members` (multi-workspace)
+- [x] 1.4 Migration: tabela `leads` (campos padrão)
+- [x] 1.5 Migration: tabela `custom_fields` (campos personalizados por workspace)
+- [x] 1.6 Migration: tabela `lead_custom_values` (valores dos campos personalizados)
+- [x] 1.7 Migration: tabela `funnel_stages` (etapas do funil)
+- [x] 1.8 Migration: tabela `stage_required_fields` (campos obrigatórios por etapa)
+- [x] 1.9 Migration: tabela `campaigns` (campanhas de abordagem)
+- [x] 1.10 Migration: tabela `generated_messages` (mensagens geradas pela IA)
+- [x] 1.11 Migration: tabela `activity_logs` (histórico de atividades)
+- [x] 1.12 Seed: etapas padrão do funil
+- [x] 1.13 Commit: `feat: migrations e seed do banco de dados`
 
 ### Fase 2 — Backend (API REST)
 - [ ] 2.1 Setup Express + TypeScript + middlewares (cors, helmet, morgan)
@@ -123,6 +123,9 @@ _(Preencher durante o desenvolvimento)_
 - O repositório GitHub já existia com remoto `origin` apontando para `fmoreira85/Desenvolvedor-Vibe-Coding-Full-Stack`, então a Fase 0 partiu da estrutura existente em vez de criar um repositório novo.
 - O Docker Desktop estava instalado, mas com o engine parado; foi necessário iniciar o Docker Desktop antes da validação com `docker compose`.
 - A porta `5432` do host já estava em uso. Ajustamos o mapeamento local para `5433:5432` via `POSTGRES_PORT` sem alterar a `DATABASE_URL` interna entre containers.
+- Centralizamos o schema em `supabase/migrations/0001_initial_schema.sql` e usamos scripts TypeScript no backend para aplicar migrations e seeds localmente, o que reduz divergência entre o ambiente Docker e a futura migração para Supabase.
+- O seed das etapas padrão foi validado de forma idempotente: após criar um workspace temporário, duas execuções consecutivas mantiveram exatamente 7 etapas no funil.
+- Ao adicionar novas dependências no backend, o volume anônimo de `node_modules` do Docker precisou ser renovado com `--renew-anon-volumes`; sem isso, o container continuava usando pacotes antigos mesmo após rebuild.
 
 ---
 

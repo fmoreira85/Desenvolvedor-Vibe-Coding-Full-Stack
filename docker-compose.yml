@@ -34,6 +34,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MIGRATIONS_DIR: /supabase/migrations
+      SEEDS_DIR: /app/src/db/seeds
     ports:
       - "3001:3001"
     depends_on:
@@ -41,6 +43,7 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/backend:/app
+      - ./supabase:/supabase
       - /app/node_modules
     networks:
       - sdrcrm-network
