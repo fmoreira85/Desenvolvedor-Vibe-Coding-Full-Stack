@@ -1,0 +1,1 @@
+# Desenvolvedor-Vibe-Coding-Full-Stack
