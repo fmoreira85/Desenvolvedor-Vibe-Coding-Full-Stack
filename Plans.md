@@ -47,26 +47,26 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 1.13 Commit: `feat: migrations e seed do banco de dados`
 
 ### Fase 2 — Backend (API REST)
-- [ ] 2.1 Setup Express + TypeScript + middlewares (cors, helmet, morgan)
-- [ ] 2.2 Rota: POST /auth/register
-- [ ] 2.3 Rota: POST /auth/login
-- [ ] 2.4 Middleware de autenticação JWT
-- [ ] 2.5 Commit: `feat: autenticação JWT (register + login)`
-- [ ] 2.6 CRUD: workspaces
-- [ ] 2.7 CRUD: leads (com isolamento por workspace)
-- [ ] 2.8 CRUD: campos personalizados
-- [ ] 2.9 Commit: `feat: endpoints de workspaces, leads e campos personalizados`
-- [ ] 2.10 CRUD: etapas do funil
-- [ ] 2.11 Rota: PATCH /leads/:id/stage (mover lead com validação de campos obrigatórios)
-- [ ] 2.12 Commit: `feat: funil de leads com validação de campos obrigatórios`
-- [ ] 2.13 CRUD: campanhas
-- [ ] 2.14 Rota: POST /campaigns/:id/generate-messages (geração via LLM)
-- [ ] 2.15 Rota: POST /leads/:id/send-message (simulado — move lead para "Tentando Contato")
-- [ ] 2.16 Commit: `feat: campanhas e geração de mensagens via IA`
-- [ ] 2.17 Lógica: geração automática por etapa gatilho (background)
-- [ ] 2.18 Commit: `feat: geração automática de mensagens por etapa gatilho`
-- [ ] 2.19 Rota: GET /dashboard (métricas por workspace)
-- [ ] 2.20 Commit: `feat: endpoint de dashboard com métricas`
+- [x] 2.1 Setup Express + TypeScript + middlewares (cors, helmet, morgan)
+- [x] 2.2 Rota: POST /auth/register
+- [x] 2.3 Rota: POST /auth/login
+- [x] 2.4 Middleware de autenticação JWT
+- [x] 2.5 Commit: `feat: autenticação JWT (register + login)`
+- [x] 2.6 CRUD: workspaces
+- [x] 2.7 CRUD: leads (com isolamento por workspace)
+- [x] 2.8 CRUD: campos personalizados
+- [x] 2.9 Commit: `feat: endpoints de workspaces, leads e campos personalizados`
+- [x] 2.10 CRUD: etapas do funil
+- [x] 2.11 Rota: PATCH /leads/:id/stage (mover lead com validação de campos obrigatórios)
+- [x] 2.12 Commit: `feat: funil de leads com validação de campos obrigatórios`
+- [x] 2.13 CRUD: campanhas
+- [x] 2.14 Rota: POST /campaigns/:id/generate-messages (geração via LLM)
+- [x] 2.15 Rota: POST /leads/:id/send-message (simulado — move lead para "Tentando Contato")
+- [x] 2.16 Commit: `feat: campanhas e geração de mensagens via IA`
+- [x] 2.17 Lógica: geração automática por etapa gatilho (background)
+- [x] 2.18 Commit: `feat: geração automática de mensagens por etapa gatilho`
+- [x] 2.19 Rota: GET /dashboard (métricas por workspace)
+- [x] 2.20 Commit: `feat: endpoint de dashboard com métricas`
 
 ### Fase 3 — Frontend (React)
 - [ ] 3.1 Setup React + Vite + TypeScript + Tailwind + Shadcn/UI
@@ -126,6 +126,8 @@ _(Preencher durante o desenvolvimento)_
 - Centralizamos o schema em `supabase/migrations/0001_initial_schema.sql` e usamos scripts TypeScript no backend para aplicar migrations e seeds localmente, o que reduz divergência entre o ambiente Docker e a futura migração para Supabase.
 - O seed das etapas padrão foi validado de forma idempotente: após criar um workspace temporário, duas execuções consecutivas mantiveram exatamente 7 etapas no funil.
 - Ao adicionar novas dependências no backend, o volume anônimo de `node_modules` do Docker precisou ser renovado com `--renew-anon-volumes`; sem isso, o container continuava usando pacotes antigos mesmo após rebuild.
+- Montar o mesmo router do backend na raiz e em `/api` fez o middleware de autenticação interceptar `/api/auth/*` cedo demais. O ajuste final foi manter o router da aplicação apenas em `/api`.
+- A geração de mensagens ganhou fallback local em template quando nenhuma chave de LLM está configurada, o que permitiu validar fluxo completo da Fase 2 sem hard-code de credenciais.
 
 ---
 
