@@ -1,8 +1,9 @@
 import cors from "cors";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 
+import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { apiRouter } from "./routes";
 
 export const createApp = () => {
@@ -13,15 +14,17 @@ export const createApp = () => {
   app.use(morgan("dev"));
   app.use(express.json());
 
-  app.get("/", (_request, response) => {
+  app.get("/", (_request: Request, response: Response) => {
     response.json({
       name: "SDR CRM API",
       status: "ok",
-      docs: "Setup base concluido. Endpoints de negocio entram nas proximas fases."
+      docs: "Backend SDR CRM ativo com autenticacao, CRUDs, campanhas, funil e dashboard."
     });
   });
 
   app.use("/api", apiRouter);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 };
