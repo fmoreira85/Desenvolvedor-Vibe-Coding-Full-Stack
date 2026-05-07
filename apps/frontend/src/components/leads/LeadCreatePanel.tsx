@@ -1,19 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { Textarea } from "../ui/Textarea";
-import type { CustomField, FunnelStage } from "../../types/models";
+import type { CustomField, FunnelStage, WorkspaceMember } from "../../types/models";
 
 type LeadCreatePanelProps = {
   stages: FunnelStage[];
   customFields: CustomField[];
+  members: WorkspaceMember[];
   onCreate: (input: Record<string, unknown>) => Promise<void>;
 };
 
-export const LeadCreatePanel = ({ stages, customFields, onCreate }: LeadCreatePanelProps) => {
+export const LeadCreatePanel = ({
+  stages,
+  customFields,
+  members,
+  onCreate
+}: LeadCreatePanelProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -23,9 +29,19 @@ export const LeadCreatePanel = ({ stages, customFields, onCreate }: LeadCreatePa
     role: "",
     leadSource: "",
     notes: "",
-    stageId: stages[0]?.id ?? ""
+    stageId: stages[0]?.id ?? "",
+    assignedUserId: ""
   });
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      stageId: stages.some((stage) => stage.id === current.stageId)
+        ? current.stageId
+        : stages[0]?.id || ""
+    }));
+  }, [stages]);
 
   return (
     <Card className="h-fit">
@@ -95,6 +111,21 @@ export const LeadCreatePanel = ({ stages, customFields, onCreate }: LeadCreatePa
         </div>
 
         <div>
+          <label className="label">Responsavel</label>
+          <Select
+            value={form.assignedUserId}
+            onChange={(event) => setForm({ ...form, assignedUserId: event.target.value })}
+          >
+            <option value="">Sem responsavel</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.userId}>
+                {member.name} ({member.role})
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
           <label className="label">Notas</label>
           <Textarea
             value={form.notes}
@@ -157,7 +188,8 @@ export const LeadCreatePanel = ({ stages, customFields, onCreate }: LeadCreatePa
                 role: "",
                 leadSource: "",
                 notes: "",
-                stageId: stages[0]?.id ?? ""
+                stageId: stages[0]?.id ?? "",
+                assignedUserId: ""
               });
               setCustomValues({});
             } finally {

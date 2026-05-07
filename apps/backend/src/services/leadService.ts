@@ -14,6 +14,8 @@ type LeadBaseRow = {
   workspace_id: string;
   stage_id: string;
   assigned_user_id: string | null;
+  assigned_user_name: string | null;
+  assigned_user_email: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -77,6 +79,14 @@ const mapLead = (lead: LeadBaseRow, customValues: LeadCustomValueRow[]) => ({
   workspaceId: lead.workspace_id,
   stageId: lead.stage_id,
   assignedUserId: lead.assigned_user_id,
+  assignedUser:
+    lead.assigned_user_id && lead.assigned_user_name && lead.assigned_user_email
+      ? {
+          id: lead.assigned_user_id,
+          name: lead.assigned_user_name,
+          email: lead.assigned_user_email
+        }
+      : null,
   name: lead.name,
   email: lead.email,
   phone: lead.phone,
@@ -114,6 +124,8 @@ const fetchLeadRows = async (
         l.workspace_id,
         l.stage_id,
         l.assigned_user_id,
+        assigned_user.name AS assigned_user_name,
+        assigned_user.email AS assigned_user_email,
         l.name,
         l.email,
         l.phone,
@@ -128,6 +140,7 @@ const fetchLeadRows = async (
         fs.color AS stage_color
       FROM leads l
       INNER JOIN funnel_stages fs ON fs.id = l.stage_id
+      LEFT JOIN users assigned_user ON assigned_user.id = l.assigned_user_id
       ${whereClause}
       ORDER BY l.updated_at DESC, l.created_at DESC
     `,
@@ -402,25 +415,33 @@ export const updateLead = async (
 ) => {
   const customFieldValues = normalizeCustomFieldValues(input.customFieldValues);
 
-  const nextStageId = await withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const { lead } = await fetchLeadForValidation(client, leadId);
     await assertWorkspaceMembership(client, userId, lead.workspace_id);
 
-    if (input.stageId) {
-      await findWorkspaceStage(client, lead.workspace_id, input.stageId);
+    const stageId = input.stageId === undefined ? lead.stage_id : (input.stageId ?? lead.stage_id);
+    const assignedUserId =
+      input.assignedUserId === undefined ? lead.assigned_user_id : input.assignedUserId;
+    const email = input.email === undefined ? lead.email : input.email;
+    const phone = input.phone === undefined ? lead.phone : input.phone;
+    const company = input.company === undefined ? lead.company : input.company;
+    const role = input.role === undefined ? lead.role : input.role;
+    const leadSource = input.leadSource === undefined ? lead.lead_source : input.leadSource;
+    const notes = input.notes === undefined ? lead.notes : input.notes;
+
+    if (stageId !== lead.stage_id) {
+      await findWorkspaceStage(client, lead.workspace_id, stageId);
     }
 
-    if (input.assignedUserId) {
-      await assertAssignableWorkspaceMember(client, lead.workspace_id, input.assignedUserId);
+    if (assignedUserId) {
+      await assertAssignableWorkspaceMember(client, lead.workspace_id, assignedUserId);
     }
-
-    const stageId = input.stageId ?? lead.stage_id;
 
     await client.query(
       `
         UPDATE leads
         SET
-          stage_id = COALESCE($2, stage_id),
+          stage_id = $2,
           assigned_user_id = $3,
           name = COALESCE($4, name),
           email = $5,
@@ -434,15 +455,15 @@ export const updateLead = async (
       `,
       [
         leadId,
-        input.stageId ?? null,
-        input.assignedUserId ?? lead.assigned_user_id,
+        stageId,
+        assignedUserId,
         input.name ?? null,
-        input.email ?? lead.email,
-        input.phone ?? lead.phone,
-        input.company ?? lead.company,
-        input.role ?? lead.role,
-        input.leadSource ?? lead.lead_source,
-        input.notes ?? lead.notes
+        email,
+        phone,
+        company,
+        role,
+        leadSource,
+        notes
       ]
     );
 
@@ -458,11 +479,12 @@ export const updateLead = async (
 
     return {
       workspaceId: lead.workspace_id,
-      stageId
+      stageId,
+      previousStageId: lead.stage_id
     };
   });
 
-  if (input.stageId) {
+  if (input.stageId && input.stageId !== result.previousStageId) {
     void triggerCampaignsForLead(leadId, userId).catch(() => undefined);
   }
 

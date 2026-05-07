@@ -2,8 +2,27 @@ import { apiClient } from "./client";
 import type { GeneratedMessage, Lead } from "../../types/models";
 
 export const leadsApi = {
-  list: async (workspaceId: string) => {
-    const { data } = await apiClient.get<{ items: Lead[] }>(`/leads?workspace_id=${workspaceId}`);
+  list: async (filters: {
+    workspaceId: string;
+    stageId?: string;
+    search?: string;
+    assignedTo?: string;
+  }) => {
+    const searchParams = new URLSearchParams({ workspace_id: filters.workspaceId });
+
+    if (filters.stageId) {
+      searchParams.set("stage_id", filters.stageId);
+    }
+
+    if (filters.search) {
+      searchParams.set("search", filters.search);
+    }
+
+    if (filters.assignedTo) {
+      searchParams.set("assigned_to", filters.assignedTo);
+    }
+
+    const { data } = await apiClient.get<{ items: Lead[] }>(`/leads?${searchParams.toString()}`);
     return data.items;
   },
   create: async (payload: Record<string, unknown>) => {

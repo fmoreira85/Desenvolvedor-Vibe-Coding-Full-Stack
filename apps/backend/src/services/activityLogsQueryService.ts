@@ -47,12 +47,24 @@ export const listActivityLogs = async (
     action: string;
     metadata: unknown;
     created_at: string;
+    actor_name: string | null;
+    actor_email: string | null;
   }>(
     `
-      SELECT id, lead_id, workspace_id, user_id, action, metadata, created_at
-      FROM activity_logs
+      SELECT
+        al.id,
+        al.lead_id,
+        al.workspace_id,
+        al.user_id,
+        al.action,
+        al.metadata,
+        al.created_at,
+        u.name AS actor_name,
+        u.email AS actor_email
+      FROM activity_logs al
+      LEFT JOIN users u ON u.id = al.user_id
       WHERE ${conditions.join(" AND ")}
-      ORDER BY created_at DESC
+      ORDER BY al.created_at DESC
     `,
     values
   );
@@ -64,6 +76,14 @@ export const listActivityLogs = async (
     userId: item.user_id,
     action: item.action,
     metadata: item.metadata,
-    createdAt: item.created_at
+    createdAt: item.created_at,
+    actor:
+      item.user_id && item.actor_name && item.actor_email
+        ? {
+            id: item.user_id,
+            name: item.actor_name,
+            email: item.actor_email
+          }
+        : null
   }));
 };

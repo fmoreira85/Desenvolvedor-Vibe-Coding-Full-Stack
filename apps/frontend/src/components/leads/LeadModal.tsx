@@ -5,7 +5,13 @@ import { activityLogsApi, type ActivityLogItem } from "../../services/api/activi
 import { campaignsApi } from "../../services/api/campaignsApi";
 import { getApiErrorMessage } from "../../services/api/client";
 import { leadsApi } from "../../services/api/leadsApi";
-import type { Campaign, CustomField, GeneratedMessage, Lead } from "../../types/models";
+import type {
+  Campaign,
+  CustomField,
+  GeneratedMessage,
+  Lead,
+  WorkspaceMember
+} from "../../types/models";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
@@ -17,15 +23,57 @@ type LeadModalProps = {
   lead: Lead | null;
   customFields: CustomField[];
   campaigns: Campaign[];
+  members: WorkspaceMember[];
   isOpen: boolean;
   onClose: () => void;
   onLeadUpdated: (lead: Lead) => void;
+};
+
+const formatActionLabel = (item: ActivityLogItem) => {
+  switch (item.action) {
+    case "lead.created":
+      return "Lead criado";
+    case "lead.updated":
+      return "Lead atualizado";
+    case "lead.stage_changed":
+      return "Etapa alterada";
+    case "message.generated":
+      return "Mensagens geradas";
+    case "message.sent":
+      return "Mensagem enviada";
+    case "message.generation_failed":
+      return "Falha na geracao";
+    default:
+      return item.action;
+  }
+};
+
+const formatActionDetails = (item: ActivityLogItem) => {
+  const metadata = (item.metadata ?? {}) as Record<string, unknown>;
+
+  switch (item.action) {
+    case "message.generated":
+      return [metadata.reason, metadata.provider, metadata.model]
+        .filter((value) => typeof value === "string" && value.length > 0)
+        .join(" • ");
+    case "message.sent":
+      return "Lead movido automaticamente para Tentando Contato.";
+    case "lead.updated":
+      return "Dados revisados e salvos no CRM.";
+    case "lead.stage_changed":
+      return "O lead avancou no funil.";
+    case "message.generation_failed":
+      return typeof metadata.error === "string" ? metadata.error : "Falha ao gerar mensagens.";
+    default:
+      return null;
+  }
 };
 
 export const LeadModal = ({
   lead,
   customFields,
   campaigns,
+  members,
   isOpen,
   onClose,
   onLeadUpdated
@@ -49,6 +97,7 @@ export const LeadModal = ({
       role: lead.role ?? "",
       leadSource: lead.leadSource ?? "",
       notes: lead.notes ?? "",
+      assignedUserId: lead.assignedUserId ?? "",
       ...Object.fromEntries(
         lead.customFieldValues.map((item) => [item.customFieldId, item.value ?? ""])
       )
@@ -59,6 +108,8 @@ export const LeadModal = ({
     void leadsApi.messages(lead.id).then(setMessages).catch(() => setMessages([]));
     void activityLogsApi.listByLead(lead.id).then(setLogs).catch(() => setLogs([]));
   }, [lead, campaigns]);
+
+  const sentMessages = messages.filter((message) => Boolean(message.sentAt));
 
   return (
     <Modal
@@ -73,7 +124,7 @@ export const LeadModal = ({
             <Card className="space-y-4">
               <div>
                 <p className="label">Detalhes</p>
-                <h4 className="mt-2 text-lg font-semibold">Editar informações do lead</h4>
+                <h4 className="mt-2 text-lg font-semibold">Editar informacoes do lead</h4>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -95,6 +146,26 @@ export const LeadModal = ({
                     />
                   </div>
                 ))}
+              </div>
+
+              <div>
+                <label className="label">Responsavel</label>
+                <Select
+                  value={form.assignedUserId ?? ""}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      assignedUserId: event.target.value
+                    }))
+                  }
+                >
+                  <option value="">Sem responsavel</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.userId}>
+                      {member.name} ({member.role})
+                    </option>
+                  ))}
+                </Select>
               </div>
 
               <div>
@@ -153,6 +224,7 @@ export const LeadModal = ({
                       role: form.role,
                       leadSource: form.leadSource,
                       notes: form.notes,
+                      assignedUserId: form.assignedUserId || null,
                       customFieldValues: customFields.map((field) => ({
                         customFieldId: field.id,
                         value: form[field.id] ?? ""
@@ -169,13 +241,13 @@ export const LeadModal = ({
                   }
                 }}
               >
-                {saving ? "Salvando..." : "Salvar alterações"}
+                {saving ? "Salvando..." : "Salvar alteracoes"}
               </Button>
             </Card>
 
             <Card className="space-y-4">
               <div>
-                <p className="label">Histórico</p>
+                <p className="label">Historico</p>
                 <h4 className="mt-2 text-lg font-semibold">Atividade recente</h4>
               </div>
 
@@ -185,10 +257,22 @@ export const LeadModal = ({
                 ) : (
                   logs.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-border/70 bg-white/60 p-4">
-                      <p className="text-sm font-semibold text-foreground">{item.action}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {formatActionLabel(item)}
+                      </p>
                       <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">
                         {new Date(item.createdAt).toLocaleString("pt-BR")}
                       </p>
+                      {item.actor ? (
+                        <p className="mt-2 text-sm text-muted">
+                          por {item.actor.name} ({item.actor.email})
+                        </p>
+                      ) : null}
+                      {formatActionDetails(item) ? (
+                        <p className="mt-2 text-sm text-foreground/80">
+                          {formatActionDetails(item)}
+                        </p>
+                      ) : null}
                     </div>
                   ))
                 )}
@@ -246,7 +330,7 @@ export const LeadModal = ({
                 ) : (
                   messages.map((message) => (
                     <div key={message.id} className="rounded-3xl border border-border/70 bg-white/70 p-4">
-                      <div className="mb-3 flex items-center justify-between">
+                      <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">
                             {message.provider ? `${message.provider} • ${message.model}` : "Mensagem"}
@@ -254,17 +338,24 @@ export const LeadModal = ({
                           <p className="text-xs uppercase tracking-[0.16em] text-muted">
                             {new Date(message.generatedAt).toLocaleString("pt-BR")}
                           </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {campaigns.find((campaign) => campaign.id === message.campaignId)?.name ??
+                              "Campanha"}
+                          </p>
                         </div>
                         <Button
                           variant="secondary"
                           size="sm"
+                          disabled={Boolean(message.sentAt)}
                           onClick={async () => {
                             try {
                               await leadsApi.sendMessage(lead.id, message.id);
                               const refreshedLead = await leadsApi.get(lead.id);
                               const refreshedMessages = await leadsApi.messages(lead.id);
+                              const freshLogs = await activityLogsApi.listByLead(lead.id);
                               onLeadUpdated(refreshedLead);
                               setMessages(refreshedMessages);
+                              setLogs(freshLogs);
                               toast.success("Mensagem marcada como enviada.");
                             } catch (error) {
                               toast.error(getApiErrorMessage(error));
@@ -286,6 +377,36 @@ export const LeadModal = ({
                   ))
                 )}
               </div>
+            </Card>
+
+            <Card className="space-y-4">
+              <div>
+                <p className="label">Historico de envios</p>
+                <h4 className="mt-2 text-lg font-semibold">Mensagens ja enviadas</h4>
+              </div>
+
+              {sentMessages.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Nenhuma mensagem enviada ainda para este lead.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {sentMessages.map((message) => (
+                    <div
+                      key={`sent-${message.id}`}
+                      className="rounded-2xl border border-border/70 bg-white/60 p-4"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        Enviado em {new Date(message.sentAt!).toLocaleString("pt-BR")}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        {campaigns.find((campaign) => campaign.id === message.campaignId)?.name ??
+                          "Campanha"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </div>
         </div>

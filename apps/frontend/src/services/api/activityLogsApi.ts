@@ -8,6 +8,11 @@ export type ActivityLogItem = {
   action: string;
   metadata: unknown;
   createdAt: string;
+  actor: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 };
 
 export const activityLogsApi = {

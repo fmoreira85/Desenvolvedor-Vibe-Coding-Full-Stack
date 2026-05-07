@@ -91,12 +91,12 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 3.20 Commit: `feat: dashboard com métricas do workspace`
 
 ### Fase 4 — Diferenciais
-- [ ] 4.1 Histórico de atividades por lead
-- [ ] 4.2 Histórico de mensagens enviadas
-- [ ] 4.3 Filtros e busca de leads (por responsável, etapa, nome, empresa)
-- [ ] 4.4 Convite de usuários para o workspace (admin/membro)
-- [ ] 4.5 Edição de etapas do funil (criar/renomear etapas)
-- [ ] 4.6 Commit: `feat: diferenciais — histórico, filtros e convite de usuários`
+- [x] 4.1 Histórico de atividades por lead
+- [x] 4.2 Histórico de mensagens enviadas
+- [x] 4.3 Filtros e busca de leads (por responsável, etapa, nome, empresa)
+- [x] 4.4 Convite de usuários para o workspace (admin/membro)
+- [x] 4.5 Edição de etapas do funil (criar/renomear etapas)
+- [x] 4.6 Commit: `feat: diferenciais — histórico, filtros e convite de usuários`
 
 ### Fase 5 — Migração para Supabase
 - [ ] 5.1 Criar projeto no Supabase
@@ -131,6 +131,9 @@ _(Preencher durante o desenvolvimento)_
 - O frontend passou a usar componentes utilitários no estilo shadcn sobre Tailwind e páginas com React Router; isso acelerou a entrega visual sem depender do CLI oficial do shadcn/UI dentro do ambiente.
 - No container do frontend, o `tsconfig` não podia estender `../../tsconfig.base.json`, porque apenas `apps/frontend` é montado em `/app`. A solução foi internalizar a configuração TypeScript no próprio app frontend.
 - O build da Fase 3 pegou cedo uma inconsistência de `@apply` com uma utility customizada de focus ring no Tailwind, então padronizamos esses estados usando classes nativas do framework.
+- Na Fase 4, o convite de membros foi implementado sobre usuários já cadastrados: o admin convida por email e o backend faz upsert do papel em `workspace_members`, o que cobre convite e ajuste de permissão no mesmo fluxo.
+- A edição de leads precisava diferenciar `undefined` de `null` nos campos opcionais. Sem isso, limpar responsável, telefone ou notas no frontend mantinha silenciosamente o valor anterior no banco.
+- O histórico por lead ficou mais útil quando a consulta de `activity_logs` passou a fazer join com `users`, permitindo mostrar ator, email e contexto legível para geração e envio de mensagens.
 
 ---
 

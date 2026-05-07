@@ -14,6 +14,16 @@ export type Workspace = {
   role: WorkspaceRole;
 };
 
+export type WorkspaceMember = {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  createdAt: string;
+  name: string;
+  email: string;
+};
+
 export type AuthPayload = {
   token: string;
   user: User;
@@ -58,6 +68,11 @@ export type Lead = {
   workspaceId: string;
   stageId: string;
   assignedUserId: string | null;
+  assignedUser: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   name: string;
   email: string | null;
   phone: string | null;

@@ -17,11 +17,12 @@ const readNullableBodyValue = (value: unknown) => {
     return undefined;
   }
 
-  if (value === null) {
+  if (value === null || value === "") {
     return null;
   }
 
-  return String(value).trim();
+  const normalized = String(value).trim();
+  return normalized.length === 0 ? null : normalized;
 };
 
 export const listLeadsHandler = asyncHandler(async (request: Request, response: Response) => {
