@@ -1,41 +1,51 @@
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { Navigate, Route, Routes } from "react-router-dom";
 
-const setupChecklist = [
-  "Monorepo inicializado com frontend e backend em TypeScript",
-  "Docker Compose com postgres, backend e frontend",
-  "Variaveis de ambiente padronizadas em .env e .env.example",
-  "Base pronta para iniciar migrations, auth e UI nas proximas fases"
-];
+import { RouteGuards } from "./components/auth/RouteGuards";
+import { AppShell } from "./components/layout/AppShell";
+import { AuthPage } from "./pages/AuthPage";
+import { CampaignsPage } from "./pages/CampaignsPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { LeadsPage } from "./pages/LeadsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { WorkspacePage } from "./pages/WorkspacePage";
 
 export default function App() {
   return (
-    <main className="app-shell">
-      <section className="hero">
-        <p className="eyebrow">SDR CRM</p>
-        <h1>Base do projeto pronta para a Fase 1.</h1>
-        <p className="summary">
-          Este ambiente sobe com Docker e expõe um frontend React + Vite e um
-          backend Express em TypeScript.
-        </p>
-      </section>
+    <Routes>
+      <Route
+        path="/auth"
+        element={
+          <RouteGuards.PublicOnly>
+            <AuthPage />
+          </RouteGuards.PublicOnly>
+        }
+      />
 
-      <section className="card-grid">
-        <article className="card">
-          <h2>Ambiente local</h2>
-          <p>
-            API esperada em <strong>{apiUrl}</strong>
-          </p>
-        </article>
+      <Route
+        path="/workspaces"
+        element={
+          <RouteGuards.Authenticated>
+            <WorkspacePage />
+          </RouteGuards.Authenticated>
+        }
+      />
 
-        <article className="card">
-          <h2>Próximos passos</h2>
-          <ul>
-            {setupChecklist.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </article>
-      </section>
-    </main>
+      <Route
+        path="/"
+        element={
+          <RouteGuards.WorkspaceSelected>
+            <AppShell />
+          </RouteGuards.WorkspaceSelected>
+        }
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="leads" element={<LeadsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 }
