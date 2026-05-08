@@ -240,50 +240,86 @@ const fetchCustomValues = async (executor: DatabaseExecutor, leadIds: string[]) 
 
 const fetchLeadRows = async (
   executor: DatabaseExecutor,
-  whereClause: string,
-  values: unknown[]
+  filters: {
+    leadId?: string;
+    workspaceId?: string;
+    stageId?: string;
+    assignedTo?: string;
+    search?: string;
+  }
 ) => {
   if (isSupabaseDataEnabled()) {
     const supabase = getSupabaseAdminClient();
-    const workspaceId = String(values[0]);
+    if (filters.leadId) {
+      const { data: leads, error: leadsError } = await supabase
+        .from("leads")
+        .select(
+          "id, workspace_id, stage_id, assigned_user_id, name, email, phone, company, role, lead_source, notes, created_at, updated_at"
+        )
+        .eq("id", filters.leadId);
+
+      throwIfSupabaseError(leadsError, "Lead lookup failed.");
+
+      const leadRows = (leads ?? []) as LeadRecord[];
+      const stageIds = Array.from(new Set(leadRows.map((lead) => lead.stage_id)));
+      const assignedUserIds = Array.from(
+        new Set(leadRows.map((lead) => lead.assigned_user_id).filter(Boolean) as string[])
+      );
+
+      const [{ data: stages, error: stagesError }, { data: users, error: usersError }] =
+        await Promise.all([
+          stageIds.length > 0
+            ? supabase
+                .from("funnel_stages")
+                .select("id, workspace_id, name, order, color, created_at")
+                .in("id", stageIds)
+            : Promise.resolve({ data: [], error: null }),
+          assignedUserIds.length > 0
+            ? supabase.from("users").select("id, name, email").in("id", assignedUserIds)
+            : Promise.resolve({ data: [], error: null })
+        ]);
+
+      throwIfSupabaseError(stagesError, "Lead stage lookup failed.");
+      throwIfSupabaseError(usersError, "Assigned user lookup failed.");
+
+      const stagesById = new Map((stages ?? []).map((stage) => [stage.id, stage as StageRecord]));
+      const usersById = new Map((users ?? []).map((user) => [user.id, user as UserRecord]));
+
+      return {
+        rows: leadRows.map((lead) => mapSupabaseLeadRow(lead, stagesById, usersById, []))
+      };
+    }
+
+    if (!filters.workspaceId) {
+      throw new AppError("workspaceId is required to list leads.", 400);
+    }
+
     let request = supabase
       .from("leads")
       .select(
         "id, workspace_id, stage_id, assigned_user_id, name, email, phone, company, role, lead_source, notes, created_at, updated_at"
       )
-      .eq("workspace_id", workspaceId)
+      .eq("workspace_id", filters.workspaceId)
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (whereClause === "WHERE l.id = $1") {
-      request = supabase
-        .from("leads")
-        .select(
-          "id, workspace_id, stage_id, assigned_user_id, name, email, phone, company, role, lead_source, notes, created_at, updated_at"
-        )
-        .eq("id", String(values[0]));
-    } else {
-      const [, stageId, assignedTo, search] = values;
+    if (filters.stageId) {
+      request = request.eq("stage_id", filters.stageId);
+    }
 
-      if (stageId) {
-        request = request.eq("stage_id", String(stageId));
-      }
+    if (filters.assignedTo) {
+      request = request.eq("assigned_user_id", filters.assignedTo);
+    }
 
-      if (assignedTo) {
-        request = request.eq("assigned_user_id", String(assignedTo));
-      }
-
-      if (search) {
-        const normalizedSearch = String(search).replace(/%/g, "");
-        request = request.or(`name.ilike.%${normalizedSearch}%,company.ilike.%${normalizedSearch}%`);
-      }
+    if (filters.search) {
+      const normalizedSearch = filters.search.replace(/%/g, "");
+      request = request.or(`name.ilike.%${normalizedSearch}%,company.ilike.%${normalizedSearch}%`);
     }
 
     const { data: leads, error: leadsError } = await request;
     throwIfSupabaseError(leadsError, "Lead lookup failed.");
 
     const leadRows = (leads ?? []) as LeadRecord[];
-    const workspaceIds = Array.from(new Set(leadRows.map((lead) => lead.workspace_id)));
     const stageIds = Array.from(new Set(leadRows.map((lead) => lead.stage_id)));
     const assignedUserIds = Array.from(
       new Set(leadRows.map((lead) => lead.assigned_user_id).filter(Boolean) as string[])
@@ -312,6 +348,38 @@ const fetchLeadRows = async (
       rows: leadRows.map((lead) => mapSupabaseLeadRow(lead, stagesById, usersById, []))
     };
   }
+
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+
+  if (filters.leadId) {
+    values.push(filters.leadId);
+    conditions.push(`l.id = $${values.length}`);
+  }
+
+  if (filters.workspaceId) {
+    values.push(filters.workspaceId);
+    conditions.push(`l.workspace_id = $${values.length}`);
+  }
+
+  if (filters.stageId) {
+    values.push(filters.stageId);
+    conditions.push(`l.stage_id = $${values.length}`);
+  }
+
+  if (filters.assignedTo) {
+    values.push(filters.assignedTo);
+    conditions.push(`l.assigned_user_id = $${values.length}`);
+  }
+
+  if (filters.search) {
+    values.push(`%${filters.search}%`);
+    conditions.push(
+      `(l.name ILIKE $${values.length} OR COALESCE(l.company, '') ILIKE $${values.length})`
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   return executor.query<LeadBaseRow>(
     `
@@ -506,7 +574,7 @@ const upsertCustomFieldValues = async (
 };
 
 const fetchLeadForValidation = async (executor: DatabaseExecutor, leadId: string) => {
-  const leadResult = await fetchLeadRows(executor, "WHERE l.id = $1", [leadId]);
+  const leadResult = await fetchLeadRows(executor, { leadId });
   const lead = leadResult.rows[0];
 
   if (!lead) {
@@ -531,28 +599,7 @@ export const listLeads = async (
   }
 ) => {
   await assertWorkspaceMembership(database, userId, filters.workspaceId);
-
-  const conditions = ["l.workspace_id = $1"];
-  const values: unknown[] = [filters.workspaceId];
-
-  if (filters.stageId) {
-    values.push(filters.stageId);
-    conditions.push(`l.stage_id = $${values.length}`);
-  }
-
-  if (filters.assignedTo) {
-    values.push(filters.assignedTo);
-    conditions.push(`l.assigned_user_id = $${values.length}`);
-  }
-
-  if (filters.search) {
-    values.push(`%${filters.search}%`);
-    conditions.push(
-      `(l.name ILIKE $${values.length} OR COALESCE(l.company, '') ILIKE $${values.length})`
-    );
-  }
-
-  const leadResult = await fetchLeadRows(database, `WHERE ${conditions.join(" AND ")}`, values);
+  const leadResult = await fetchLeadRows(database, filters);
   const customValues = await fetchCustomValues(database, leadResult.rows.map((lead) => lead.id));
 
   return leadResult.rows.map((lead) => mapLead(lead, customValues));
