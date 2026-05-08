@@ -138,9 +138,9 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 5.8 Commit: `chore: migraÃ§Ã£o para Supabase (auth, banco, RLS)`
 
 ### Fase 6 â€” Deploy e Entrega
-- [ ] 6.1 Deploy do frontend (Vercel ou Netlify)
+- [ ] 6.1 Deploy do frontend ( Netlify)
 - [ ] 6.2 Confirmar que o deploy estÃ¡ acessÃ­vel publicamente
-- [ ] 6.3 Escrever README completo
+- [x] 6.3 Escrever README completo
 - [ ] 6.4 Gravar vÃ­deo de demonstraÃ§Ã£o (atÃ© 10 minutos)
 - [ ] 6.5 Commit: `docs: README final e link do vÃ­deo`
 
@@ -177,6 +177,7 @@ _(Preencher durante o desenvolvimento)_
 - O host direto `db.<project-ref>.supabase.co` nÃ£o respondeu neste ambiente. O `pooler` do Supabase continuou sendo a opÃ§Ã£o correta para `DATABASE_URL`, mas a validaÃ§Ã£o da Fase 5 passou a usar `@supabase/supabase-js` nas rotas crÃ­ticas do backend para evitar dependÃªncia do `pg`.
 - O client server-side do Supabase em Node 20 precisou de `ws` injetado explicitamente no helper compartilhado do backend; sem isso, a inicializaÃ§Ã£o do client falhava ao montar o Realtime internamente.
 - O Docker Desktop ficou indisponÃ­vel no fim da fase, entÃ£o o smoke test final apontando para o Supabase foi validado com o backend rodando localmente via `npm run dev --workspace apps/backend`.
+- A Fase 6 ficou parcialmente bloqueada neste ambiente porque o deploy no Netlify exige credenciais externas (`NETLIFY_AUTH_TOKEN` e `NETLIFY_SITE_ID`) que nÃ£o estavam configuradas no shell.
 - **Shadcn/UI + Tailwind** â€” componentes prontos e acessÃ­veis, acelera o desenvolvimento do frontend sem reinventar a roda.
 - **React DnD ou @dnd-kit** â€” para o drag and drop do kanban. @dnd-kit Ã© mais moderno e tem suporte melhor a acessibilidade.
 
