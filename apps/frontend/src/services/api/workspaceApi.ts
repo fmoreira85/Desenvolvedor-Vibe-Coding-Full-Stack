@@ -10,6 +10,10 @@ export const workspaceApi = {
     const { data } = await apiClient.post<Workspace>("/workspaces", { name });
     return data;
   },
+  update: async (workspaceId: string, name: string) => {
+    const { data } = await apiClient.patch<Workspace>(`/workspaces/${workspaceId}`, { name });
+    return data;
+  },
   listMembers: async (workspaceId: string) => {
     const { data } = await apiClient.get<{ items: WorkspaceMember[] }>(
       `/workspaces/${workspaceId}/members`

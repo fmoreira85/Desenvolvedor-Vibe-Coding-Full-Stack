@@ -134,7 +134,7 @@ export const LeadCreatePanel = ({
         </div>
 
         {customFields.length > 0 ? (
-          <div className="space-y-4 rounded-3xl border border-border/70 bg-background/60 p-4">
+          <div className="space-y-4 rounded-3xl border border-border bg-muted p-4">
             <h4 className="text-sm font-semibold text-foreground">Campos personalizados</h4>
             {customFields.map((field) => (
               <div key={field.id}>

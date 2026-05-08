@@ -15,6 +15,7 @@ type LeadBaseRow = {
   workspace_id: string;
   stage_id: string;
   assigned_user_id: string | null;
+  generated_messages_count: number;
   assigned_user_name: string | null;
   assigned_user_email: string | null;
   name: string;
@@ -36,6 +37,7 @@ type LeadRecord = {
   workspace_id: string;
   stage_id: string;
   assigned_user_id: string | null;
+  generated_messages_count?: number;
   name: string;
   email: string | null;
   phone: string | null;
@@ -113,6 +115,7 @@ const mapLead = (lead: LeadBaseRow, customValues: LeadCustomValueRow[]) => ({
   workspaceId: lead.workspace_id,
   stageId: lead.stage_id,
   assignedUserId: lead.assigned_user_id,
+  generatedMessagesCount: lead.generated_messages_count,
   assignedUser:
     lead.assigned_user_id && lead.assigned_user_name && lead.assigned_user_email
       ? {
@@ -162,6 +165,7 @@ const mapSupabaseLeadRow = (
 
   return {
     ...lead,
+    generated_messages_count: lead.generated_messages_count ?? 0,
     assigned_user_name: assignedUser?.name ?? null,
     assigned_user_email: assignedUser?.email ?? null,
     stage_name: stage.name,
@@ -238,6 +242,41 @@ const fetchCustomValues = async (executor: DatabaseExecutor, leadIds: string[]) 
   return result.rows;
 };
 
+const fetchGeneratedMessageCounts = async (leadIds: string[]) => {
+  if (leadIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("generated_messages")
+      .select("lead_id")
+      .in("lead_id", leadIds);
+
+    throwIfSupabaseError(error, "Generated message count lookup failed.");
+
+    const counts = new Map<string, number>();
+    for (const item of data ?? []) {
+      counts.set(item.lead_id, (counts.get(item.lead_id) ?? 0) + 1);
+    }
+
+    return counts;
+  }
+
+  const result = await query<{ lead_id: string; count: string }>(
+    `
+      SELECT lead_id, COUNT(*)::text AS count
+      FROM generated_messages
+      WHERE lead_id = ANY($1::uuid[])
+      GROUP BY lead_id
+    `,
+    [leadIds]
+  );
+
+  return new Map(result.rows.map((row) => [row.lead_id, Number(row.count)]));
+};
+
 const fetchLeadRows = async (
   executor: DatabaseExecutor,
   filters: {
@@ -261,6 +300,7 @@ const fetchLeadRows = async (
       throwIfSupabaseError(leadsError, "Lead lookup failed.");
 
       const leadRows = (leads ?? []) as LeadRecord[];
+      const messageCounts = await fetchGeneratedMessageCounts(leadRows.map((lead) => lead.id));
       const stageIds = Array.from(new Set(leadRows.map((lead) => lead.stage_id)));
       const assignedUserIds = Array.from(
         new Set(leadRows.map((lead) => lead.assigned_user_id).filter(Boolean) as string[])
@@ -286,7 +326,17 @@ const fetchLeadRows = async (
       const usersById = new Map((users ?? []).map((user) => [user.id, user as UserRecord]));
 
       return {
-        rows: leadRows.map((lead) => mapSupabaseLeadRow(lead, stagesById, usersById, []))
+        rows: leadRows.map((lead) =>
+          mapSupabaseLeadRow(
+            {
+              ...lead,
+              generated_messages_count: messageCounts.get(lead.id) ?? 0
+            },
+            stagesById,
+            usersById,
+            []
+          )
+        )
       };
     }
 
@@ -311,15 +361,20 @@ const fetchLeadRows = async (
       request = request.eq("assigned_user_id", filters.assignedTo);
     }
 
-    if (filters.search) {
-      const normalizedSearch = filters.search.replace(/%/g, "");
-      request = request.or(`name.ilike.%${normalizedSearch}%,company.ilike.%${normalizedSearch}%`);
-    }
-
     const { data: leads, error: leadsError } = await request;
     throwIfSupabaseError(leadsError, "Lead lookup failed.");
 
-    const leadRows = (leads ?? []) as LeadRecord[];
+    const normalizedSearch = filters.search?.trim().toLowerCase();
+    const leadRows = ((leads ?? []) as LeadRecord[]).filter((lead) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return [lead.name, lead.company ?? ""].some((value) =>
+        value.toLowerCase().includes(normalizedSearch)
+      );
+    });
+    const messageCounts = await fetchGeneratedMessageCounts(leadRows.map((lead) => lead.id));
     const stageIds = Array.from(new Set(leadRows.map((lead) => lead.stage_id)));
     const assignedUserIds = Array.from(
       new Set(leadRows.map((lead) => lead.assigned_user_id).filter(Boolean) as string[])
@@ -345,7 +400,17 @@ const fetchLeadRows = async (
     const usersById = new Map((users ?? []).map((user) => [user.id, user as UserRecord]));
 
     return {
-      rows: leadRows.map((lead) => mapSupabaseLeadRow(lead, stagesById, usersById, []))
+      rows: leadRows.map((lead) =>
+        mapSupabaseLeadRow(
+          {
+            ...lead,
+            generated_messages_count: messageCounts.get(lead.id) ?? 0
+          },
+          stagesById,
+          usersById,
+          []
+        )
+      )
     };
   }
 
@@ -388,6 +453,7 @@ const fetchLeadRows = async (
         l.workspace_id,
         l.stage_id,
         l.assigned_user_id,
+        COALESCE(gm.generated_messages_count, 0) AS generated_messages_count,
         assigned_user.name AS assigned_user_name,
         assigned_user.email AS assigned_user_email,
         l.name,
@@ -404,6 +470,11 @@ const fetchLeadRows = async (
         fs.color AS stage_color
       FROM leads l
       INNER JOIN funnel_stages fs ON fs.id = l.stage_id
+      LEFT JOIN (
+        SELECT lead_id, COUNT(*)::int AS generated_messages_count
+        FROM generated_messages
+        GROUP BY lead_id
+      ) gm ON gm.lead_id = l.id
       LEFT JOIN users assigned_user ON assigned_user.id = l.assigned_user_id
       ${whereClause}
       ORDER BY l.updated_at DESC, l.created_at DESC

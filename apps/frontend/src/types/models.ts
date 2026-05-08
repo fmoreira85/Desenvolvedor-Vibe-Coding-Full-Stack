@@ -68,6 +68,7 @@ export type Lead = {
   workspaceId: string;
   stageId: string;
   assignedUserId: string | null;
+  generatedMessagesCount: number;
   assignedUser: {
     id: string;
     name: string;
@@ -125,5 +126,25 @@ export type DashboardMetrics = {
     order: number;
     color: string;
     count: number;
+  }>;
+  leadsCreatedByWeek: Array<{
+    weekLabel: string;
+    count: number;
+  }>;
+  recentLeads: Array<{
+    id: string;
+    name: string;
+    company: string | null;
+    createdAt: string;
+    stage: {
+      id: string;
+      name: string;
+      color: string;
+    };
+    assignedUser: {
+      id: string;
+      name: string;
+      email: string;
+    } | null;
   }>;
 };

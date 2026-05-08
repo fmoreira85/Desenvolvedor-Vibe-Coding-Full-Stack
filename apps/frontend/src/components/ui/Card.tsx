@@ -8,7 +8,7 @@ export const Card = ({
   ...props
 }: PropsWithChildren<HTMLAttributes<HTMLDivElement>>) => {
   return (
-    <div className={cn("panel-soft p-5", className)} {...props}>
+    <div className={cn("panel-soft p-5 sm:p-6", className)} {...props}>
       {children}
     </div>
   );

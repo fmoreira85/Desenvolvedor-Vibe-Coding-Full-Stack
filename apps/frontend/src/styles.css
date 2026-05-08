@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,15 +7,27 @@
 @layer base {
   :root {
     color-scheme: light;
-    --background: #f6f4eb;
-    --foreground: #102033;
-    --muted: #6c7a8d;
-    --card: rgba(255, 252, 245, 0.92);
-    --border: rgba(16, 32, 51, 0.12);
-    --accent: #0f766e;
-    --success: #059669;
-    --danger: #dc2626;
+    --primary: #1818eb;
+    --primary-foreground: #ffffff;
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --accent: #1818eb;
+    --accent-soft: rgba(24, 24, 235, 0.1);
+    --accent-strong: #1212c8;
+    --success: #16a34a;
     --warning: #d97706;
+    --danger: #ef4444;
+    --success-soft: rgba(22, 163, 74, 0.12);
+    --warning-soft: rgba(217, 119, 6, 0.14);
+    --danger-soft: rgba(239, 68, 68, 0.12);
+    --sidebar-bg: #0f172a;
+    --sidebar-text: #cbd5e1;
+    --sidebar-active: #1e293b;
+    --ring: rgba(24, 24, 235, 0.16);
   }
 
   * {
@@ -25,51 +37,129 @@
 
   html {
     @apply bg-background text-foreground antialiased;
+    scroll-behavior: smooth;
   }
 
   body {
     @apply m-0 min-h-screen bg-background font-sans text-foreground;
     background:
-      radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 28%),
-      radial-gradient(circle at bottom left, rgba(217, 119, 6, 0.14), transparent 24%),
-      linear-gradient(180deg, #fdf9ef 0%, #f4efe4 100%);
+      radial-gradient(circle at top left, rgba(24, 24, 235, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(15, 23, 42, 0.08), transparent 22%),
+      linear-gradient(180deg, #fbfdff 0%, #f8fafc 38%, #f1f5f9 100%);
   }
 
   #root {
     @apply min-h-screen;
   }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(24, 24, 235, 0.16);
+  }
 }
 
 @layer components {
   .page-shell {
-    @apply mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8;
+    @apply mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6;
   }
 
   .panel {
-    @apply rounded-[28px] border border-border bg-card shadow-ambient backdrop-blur;
+    @apply rounded-2xl border border-border bg-card shadow-panel;
   }
 
   .panel-soft {
-    @apply rounded-[24px] border border-white/50 bg-white/70 shadow-lg backdrop-blur;
+    @apply rounded-2xl border border-border bg-white shadow-sm transition-shadow hover:shadow-md;
   }
 
   .section-title {
-    @apply font-display text-2xl font-semibold tracking-tight text-foreground;
+    @apply font-display text-2xl font-bold tracking-tight text-foreground;
   }
 
   .section-copy {
-    @apply text-sm leading-6 text-muted;
+    @apply text-sm leading-6 text-muted-foreground;
   }
 
   .label {
-    @apply text-xs font-semibold uppercase tracking-[0.24em] text-muted;
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground;
   }
 
   .field {
-    @apply mt-2 h-12 w-full rounded-2xl border border-border bg-white/75 px-4 text-sm text-foreground outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20;
+    @apply mt-2 h-11 w-full rounded-md border border-border bg-white px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground hover:border-slate-300 focus:border-primary focus:ring-4 focus:ring-[var(--ring)];
   }
 
   .field-area {
-    @apply mt-2 min-h-[120px] w-full rounded-2xl border border-border bg-white/75 px-4 py-3 text-sm text-foreground outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20;
+    @apply mt-2 min-h-[120px] w-full rounded-md border border-border bg-white px-3.5 py-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground hover:border-slate-300 focus:border-primary focus:ring-4 focus:ring-[var(--ring)];
+  }
+
+  .hero-grid {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    background-position: center;
+    background-size: 20px 20px;
+  }
+
+  .metric-tile {
+    @apply panel-soft overflow-hidden p-5;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  }
+
+  .workspace-badge {
+    @apply inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .glass-divider {
+    @apply border-t border-border;
+  }
+
+  .surface-muted {
+    @apply rounded-xl border border-border bg-muted;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-sidebar-text transition-colors hover:bg-white/5 hover:text-white;
+  }
+
+  .sidebar-link-active {
+    @apply rounded-lg border-l-2 border-primary bg-sidebar-active px-4 py-2.5 text-sm font-semibold text-white;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-slate-200;
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  .app-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-track {
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 999px;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.32);
+    border-radius: 999px;
   }
 }

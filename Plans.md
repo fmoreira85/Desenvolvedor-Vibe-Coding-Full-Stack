@@ -90,6 +90,35 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [x] 3.19 Tela: Dashboard com mÃ©tricas
 - [x] 3.20 Commit: `feat: dashboard com mÃ©tricas do workspace`
 
+### Fase 3B Design
+- [x] 3B.1 Configurar tokens de design em globals.css e tailwind.config.ts
+- [x] 3B.2 Instalar dependencias: sonner, recharts, cmdk, class-variance-authority
+- [x] 3B.3 Criar AppLayout.tsx com Sidebar (dark) + Navbar (light) + Outlet
+- [x] 3B.4 Sidebar: nav items com icones Lucide, active state, user menu
+- [x] 3B.5 Navbar: workspace selector, busca (cmdk), avatar dropdown
+- [x] 3B.6 Sidebar responsiva: Sheet no mobile, colapsada no tablet
+- [x] 3B.7 Dashboard: 4 KPI Cards com icones e trend badges
+- [x] 3B.8 Dashboard: BarChart horizontal (leads por etapa) via Recharts
+- [x] 3B.9 Dashboard: AreaChart semanal (leads criados) via Recharts
+- [x] 3B.10 Dashboard: tabela dos 5 leads mais recentes
+- [x] 3B.11 Kanban: toolbar de filtros (busca, etapa, responsavel)
+- [x] 3B.12 Kanban: colunas com header colorido, badge count e drop zone visual
+- [x] 3B.13 LeadCard: empresa, fonte, avatar responsavel, icone IA
+- [x] 3B.14 LeadDetailModal: formulario completo com custom fields
+- [x] 3B.15 LeadDetailModal: secao de mensagens IA com copiar/enviar
+- [x] 3B.16 LeadDetailModal: timeline de historico (activity_logs)
+- [x] 3B.17 Campanhas: grid de cards com status, toggle ativo, Sheet de edicao
+- [x] 3B.18 Campanhas: fluxo geracao IA com skeleton loading e 3 cards de resultado
+- [x] 3B.19 Configuracoes: Tabs com 4 secoes
+- [x] 3B.20 Configuracoes: CRUD de campos personalizados com Badge de tipo
+- [x] 3B.21 Configuracoes: etapas do funil drag-and-drop + required fields collapsible
+- [x] 3B.22 Configuracoes: gestao de membros com convite por email
+- [x] 3B.23 Auth: split layout dark/light para Login e Cadastro
+- [x] 3B.24 Globais: Empty states em todas as listas
+- [x] 3B.25 Globais: Skeleton loading em cards, tabelas e kanban
+- [x] 3B.26 Globais: AlertDialog para todas as acoes destrutivas
+- [x] 3B.27 Commit: `feat: fase 3B - design SaaS light clean completo`
+
 ### Fase 4 â€” Diferenciais
 - [x] 4.1 HistÃ³rico de atividades por lead
 - [x] 4.2 HistÃ³rico de mensagens enviadas

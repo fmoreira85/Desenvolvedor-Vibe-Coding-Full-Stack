@@ -1,114 +1,207 @@
-import { BarChart3, Building2, KanbanSquare, LogOut, Megaphone, Settings2 } from "lucide-react";
-import { startTransition } from "react";
+import {
+  Bell,
+  Building2,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  Megaphone,
+  Menu,
+  Search,
+  Settings2,
+  Users,
+  X
+} from "lucide-react";
+import { startTransition, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useActiveWorkspace } from "../../hooks/useActiveWorkspace";
 import { useSessionStore } from "../../hooks/useSessionStore";
 import { authApi } from "../../services/api/authApi";
 import { cn } from "../../utils/cn";
+import { getInitials } from "../../utils/formatters";
+import { Button } from "../ui/Button";
+import { CommandPalette } from "./CommandPalette";
 
 const navigationItems = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/leads", label: "Leads", icon: KanbanSquare },
-  { to: "/campaigns", label: "Campanhas", icon: Megaphone },
-  { to: "/settings", label: "Configurações", icon: Settings2 },
-  { to: "/workspaces", label: "Workspaces", icon: Building2 }
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, shortLabel: "Dash" },
+  { to: "/leads", label: "Leads", icon: Users, shortLabel: "Leads" },
+  { to: "/campaigns", label: "Campanhas", icon: Megaphone, shortLabel: "Camp" },
+  { to: "/settings", label: "Configuracoes", icon: Settings2, shortLabel: "Setup" }
 ];
+
+const getPageTitle = (pathname: string) => {
+  if (pathname.startsWith("/leads")) {
+    return "Leads";
+  }
+
+  if (pathname.startsWith("/campaigns")) {
+    return "Campanhas";
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return "Configuracoes";
+  }
+
+  return "Dashboard";
+};
+
+const SidebarContent = ({
+  compact,
+  onNavigate
+}: {
+  compact?: boolean;
+  onNavigate?: () => void;
+}) => {
+  const navigate = useNavigate();
+  const user = useSessionStore((state) => state.user);
+  const activeWorkspace = useActiveWorkspace();
+
+  return (
+    <div className="flex h-full flex-col bg-sidebar">
+      <div className={cn("border-b border-white/10", compact ? "px-4 py-5" : "px-6 py-5")}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-sm font-bold text-white">
+            SDR
+          </div>
+          {!compact ? (
+            <div>
+              <p className="font-display text-lg font-bold text-white">SDR CRM</p>
+              <p className="text-xs text-sidebar-text">SaaS para pre-vendas</p>
+            </div>
+          ) : null}
+        </div>
+
+        {!compact ? (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1 text-xs text-white/80">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            {activeWorkspace?.name ?? "Sem workspace"}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="px-3 py-5">
+        <p className={cn("mb-2 text-xs uppercase tracking-[0.2em] text-slate-500", compact && "px-1 text-center")}>
+          {compact ? "NAV" : "Principal"}
+        </p>
+
+        <nav className="space-y-1.5">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    isActive ? "sidebar-link-active" : "sidebar-link",
+                    compact && "justify-center px-0"
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!compact ? <span>{item.label}</span> : <span className="sr-only">{item.shortLabel}</span>}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="mt-auto border-t border-white/10 p-4">
+        <button
+          type="button"
+          onClick={() => {
+            navigate("/workspaces");
+            onNavigate?.();
+          }}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-xl bg-white/5 px-3 py-3 text-left transition hover:bg-white/10",
+            compact && "justify-center px-0"
+          )}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
+            {getInitials(user?.name ?? "U")}
+          </div>
+          {!compact ? (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{user?.name ?? "Usuario"}</p>
+              <p className="truncate text-xs text-sidebar-text">{user?.email}</p>
+            </div>
+          ) : null}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const AppShell = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const pageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname]);
   const user = useSessionStore((state) => state.user);
   const workspaces = useSessionStore((state) => state.workspaces);
   const activeWorkspaceId = useSessionStore((state) => state.activeWorkspaceId);
   const setActiveWorkspaceId = useSessionStore((state) => state.setActiveWorkspaceId);
   const logout = useSessionStore((state) => state.logout);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const activeWorkspace = useActiveWorkspace();
 
+  const handleWorkspaceChange = (value: string) => {
+    startTransition(() => {
+      setActiveWorkspaceId(value || null);
+      if (value && location.pathname === "/workspaces") {
+        navigate("/dashboard");
+      }
+    });
+  };
+
+  const handleLogout = async () => {
+    await authApi.logout();
+    logout();
+    navigate("/auth");
+  };
+
   return (
-    <div className="min-h-screen">
-      <div className="page-shell lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
-        <aside className="panel hidden overflow-hidden lg:flex lg:min-h-[calc(100vh-3rem)] lg:flex-col lg:justify-between">
-          <div className="space-y-6 p-6">
-            <div className="space-y-3">
-              <span className="label">SDR CRM</span>
-              <div>
-                <h1 className="font-display text-3xl font-semibold leading-none">
-                  Pré-vendas com cadência, contexto e IA.
-                </h1>
-                <p className="mt-3 text-sm leading-6 text-muted">
-                  Um cockpit operacional para organizar leads, disparar campanhas e manter o funil
-                  em movimento.
+    <>
+      <div className="flex h-screen bg-background">
+        <aside className="hidden border-r border-border md:flex md:w-20 xl:hidden">
+          <SidebarContent compact />
+        </aside>
+        <aside className="hidden border-r border-border xl:flex xl:w-64">
+          <SidebarContent />
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="sticky top-0 z-30 flex h-14 items-center border-b border-border bg-white/80 px-4 backdrop-blur sm:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
+                <Menu className="h-4 w-4" />
+              </Button>
+
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-semibold text-foreground">{pageTitle}</h1>
+                <p className="hidden text-xs text-muted-foreground sm:block">
+                  {activeWorkspace?.name ?? "Selecione um workspace para continuar"}
                 </p>
               </div>
             </div>
 
-            <nav className="space-y-2">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setPaletteOpen(true)}>
+                <Search className="h-4 w-4" />
+                Buscar
+                <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  Ctrl K
+                </span>
+              </Button>
 
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition",
-                        isActive
-                          ? "bg-foreground text-white shadow-lg"
-                          : "text-foreground/80 hover:bg-white/70 hover:text-foreground"
-                      )
-                    }
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </NavLink>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="border-t border-border/70 p-6">
-            <button
-              type="button"
-              onClick={async () => {
-                await authApi.logout();
-                logout();
-                navigate("/auth");
-              }}
-              className="flex w-full items-center justify-between rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Encerrar sessão
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </aside>
-
-        <div className="flex min-h-[calc(100vh-3rem)] flex-col gap-6">
-          <header className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <span className="label">Workspace ativo</span>
-              <h2 className="mt-2 font-display text-2xl font-semibold">
-                {activeWorkspace?.name ?? "Selecione um workspace"}
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                {user?.name} • {location.pathname.replace("/", "") || "dashboard"}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:items-end">
               <select
-                className="field mt-0 min-w-[250px]"
+                className="field mt-0 hidden min-w-[180px] sm:block"
                 value={activeWorkspaceId ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  startTransition(() => {
-                    setActiveWorkspaceId(value || null);
-                    if (value && location.pathname === "/workspaces") {
-                      navigate("/dashboard");
-                    }
-                  });
-                }}
+                onChange={(event) => handleWorkspaceChange(event.target.value)}
               >
                 <option value="">Escolha um workspace</option>
                 {workspaces.map((workspace) => (
@@ -117,32 +210,82 @@ export const AppShell = () => {
                   </option>
                 ))}
               </select>
-              <div className="flex gap-2 lg:hidden">
+
+              <Button variant="ghost" size="icon" aria-label="Notificacoes">
+                <Bell className="h-4 w-4" />
+              </Button>
+
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => navigate("/workspaces")}
-                  className="rounded-2xl border border-border bg-white/70 px-4 py-2 text-sm font-medium"
+                  onClick={() => setMenuOpen((current) => !current)}
+                  className="flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-left shadow-sm"
                 >
-                  Workspaces
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
+                    {getInitials(user?.name ?? "U")}
+                  </div>
+                  <div className="hidden min-w-0 sm:block">
+                    <p className="truncate text-sm font-semibold text-foreground">{user?.name ?? "Usuario"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                  <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
                 </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await authApi.logout();
-                    logout();
-                    navigate("/auth");
-                  }}
-                  className="rounded-2xl bg-foreground px-4 py-2 text-sm font-medium text-white"
-                >
-                  Sair
-                </button>
+
+                {menuOpen ? (
+                  <div className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-xl border border-border bg-white p-2 shadow-ambient">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/workspaces");
+                      }}
+                    >
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      Workspaces
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger hover:bg-red-50"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void handleLogout();
+                      }}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sair
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </header>
 
-          <Outlet />
+          <main className="flex-1 overflow-y-auto">
+            <Outlet />
+          </main>
         </div>
       </div>
-    </div>
+
+      {mobileOpen ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-sm md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 z-50 w-64 overflow-hidden md:hidden">
+            <div className="flex h-14 items-center justify-end border-b border-white/10 bg-sidebar px-4">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setMobileOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <SidebarContent onNavigate={() => setMobileOpen(false)} />
+          </aside>
+        </>
+      ) : null}
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </>
   );
 };
