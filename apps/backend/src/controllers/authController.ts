@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { loginUser, registerUser } from "../services/authService";
+import { getAuthenticatedSession, loginUser, registerUser } from "../services/authService";
 import { asyncHandler } from "../utils/asyncHandler";
 import { assertString } from "../utils/validation";
 
@@ -20,5 +20,18 @@ export const loginHandler = asyncHandler(async (request: Request, response: Resp
     password: assertString(request.body.password, "password")
   });
 
+  response.json(payload);
+});
+
+export const sessionHandler = asyncHandler(async (request: Request, response: Response) => {
+  const authorizationHeader = request.headers.authorization;
+
+  if (!authorizationHeader?.startsWith("Bearer ")) {
+    response.status(401).json({ error: "Authorization header is required." });
+    return;
+  }
+
+  const token = authorizationHeader.replace("Bearer ", "").trim();
+  const payload = await getAuthenticatedSession(token);
   response.json(payload);
 });

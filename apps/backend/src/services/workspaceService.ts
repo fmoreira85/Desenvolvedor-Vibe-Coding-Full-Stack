@@ -1,4 +1,5 @@
 import { withTransaction } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { AppError } from "../errors/AppError";
 import { logActivity } from "./activityLogService";
 import { ensureDefaultStagesForWorkspace } from "./defaultStagesService";
@@ -14,6 +15,8 @@ type WorkspaceRow = {
   created_at: string;
   role: "admin" | "member";
 };
+
+type WorkspaceBaseRow = Pick<WorkspaceRow, "id" | "name" | "created_at">;
 
 type WorkspaceMemberRow = {
   id: string;
@@ -35,7 +38,56 @@ const mapWorkspaceMember = (member: WorkspaceMemberRow) => ({
   email: member.user_email
 });
 
+const mapWorkspace = (workspace: WorkspaceBaseRow, role?: WorkspaceRole) => ({
+  id: workspace.id,
+  name: workspace.name,
+  createdAt: workspace.created_at,
+  ...(role ? { role } : {})
+});
+
 export const listUserWorkspaces = async (userId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data: memberships, error: membershipError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id, role, created_at")
+      .eq("user_id", userId);
+
+    throwIfSupabaseError(membershipError, "Workspace membership lookup failed.");
+
+    if (!memberships || memberships.length === 0) {
+      return [];
+    }
+
+    const workspaceIds = memberships.map((membership) => membership.workspace_id);
+    const { data: workspaces, error: workspaceError } = await supabase
+      .from("workspaces")
+      .select("id, name, created_at")
+      .in("id", workspaceIds)
+      .order("created_at", { ascending: true });
+
+    throwIfSupabaseError(workspaceError, "Workspace lookup failed.");
+
+    const workspacesById = new Map((workspaces ?? []).map((workspace) => [workspace.id, workspace]));
+
+    return memberships
+      .map((membership) => {
+        const workspace = workspacesById.get(membership.workspace_id);
+
+        if (!workspace) {
+          return null;
+        }
+
+        return {
+          id: workspace.id,
+          name: workspace.name,
+          createdAt: workspace.created_at,
+          role: membership.role
+        };
+      })
+      .filter((workspace): workspace is NonNullable<typeof workspace> => Boolean(workspace));
+  }
+
   const result = await withTransaction(async (client) => {
     return client.query<WorkspaceRow>(
       `
@@ -58,8 +110,46 @@ export const listUserWorkspaces = async (userId: string) => {
 };
 
 export const createWorkspace = async (userId: string, name: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data: workspace, error: workspaceError } = await supabase
+      .from("workspaces")
+      .insert({ name })
+      .select("id, name, created_at")
+      .single<WorkspaceBaseRow>();
+
+    throwIfSupabaseError(workspaceError, "Workspace creation failed.");
+
+    if (!workspace) {
+      throw new AppError("Workspace creation did not return a record.", 500);
+    }
+
+    const { error: membershipError } = await supabase.from("workspace_members").insert({
+      workspace_id: workspace.id,
+      user_id: userId,
+      role: "admin"
+    });
+
+    throwIfSupabaseError(membershipError, "Workspace membership creation failed.");
+
+    await ensureDefaultStagesForWorkspace({ query: async () => ({ rows: [] } as never) }, workspace.id);
+    await logActivity({ query: async () => ({ rows: [] } as never) }, {
+      workspaceId: workspace.id,
+      userId,
+      action: "workspace.created",
+      metadata: { name: workspace.name }
+    });
+
+    return {
+      id: workspace.id,
+      name: workspace.name,
+      createdAt: workspace.created_at,
+      role: "admin" as const
+    };
+  }
+
   return withTransaction(async (client) => {
-    const workspaceResult = await client.query<Pick<WorkspaceRow, "id" | "name" | "created_at">>(
+    const workspaceResult = await client.query<WorkspaceBaseRow>(
       `
         INSERT INTO workspaces (name)
         VALUES ($1)
@@ -99,10 +189,29 @@ export const createWorkspace = async (userId: string, name: string) => {
 };
 
 export const getWorkspaceById = async (userId: string, workspaceId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceMembership({ query: async () => ({ rows: [] } as never) }, userId, workspaceId);
+
+    const { data: workspace, error } = await supabase
+      .from("workspaces")
+      .select("id, name, created_at")
+      .eq("id", workspaceId)
+      .maybeSingle<WorkspaceBaseRow>();
+
+    throwIfSupabaseError(error, "Workspace lookup failed.");
+
+    if (!workspace) {
+      throw new AppError("Workspace not found.", 404);
+    }
+
+    return mapWorkspace(workspace);
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceMembership(client, userId, workspaceId);
 
-    const result = await client.query<Pick<WorkspaceRow, "id" | "name" | "created_at">>(
+    const result = await client.query<WorkspaceBaseRow>(
       `
         SELECT id, name, created_at
         FROM workspaces
@@ -117,15 +226,57 @@ export const getWorkspaceById = async (userId: string, workspaceId: string) => {
       throw new AppError("Workspace not found.", 404);
     }
 
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      createdAt: workspace.created_at
-    };
+    return mapWorkspace(workspace);
   });
 };
 
 export const listWorkspaceMembers = async (userId: string, workspaceId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceMembership({ query: async () => ({ rows: [] } as never) }, userId, workspaceId);
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from("workspace_members")
+      .select("id, workspace_id, user_id, role, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+
+    throwIfSupabaseError(membershipError, "Workspace member lookup failed.");
+
+    const userIds = (memberships ?? []).map((member) => member.user_id);
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id, name, email")
+      .in("id", userIds);
+
+    throwIfSupabaseError(usersError, "User lookup for workspace members failed.");
+
+    const usersById = new Map((users ?? []).map((memberUser) => [memberUser.id, memberUser]));
+
+    return (memberships ?? [])
+      .map((member) => {
+        const mappedUser = usersById.get(member.user_id);
+
+        if (!mappedUser) {
+          return null;
+        }
+
+        return mapWorkspaceMember({
+          ...member,
+          user_name: mappedUser.name,
+          user_email: mappedUser.email
+        });
+      })
+      .filter((member): member is NonNullable<typeof member> => Boolean(member))
+      .sort((a, b) => {
+        if (a.role !== b.role) {
+          return a.role === "admin" ? -1 : 1;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceMembership(client, userId, workspaceId);
 
@@ -156,6 +307,78 @@ export const inviteWorkspaceMember = async (
   workspaceId: string,
   input: { email: string; role: WorkspaceRole }
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceAdminMembership({ query: async () => ({ rows: [] } as never) }, userId, workspaceId);
+
+    const { data: invitedUser, error: userError } = await supabase
+      .from("users")
+      .select("id, name, email")
+      .ilike("email", input.email)
+      .maybeSingle<{ id: string; name: string; email: string }>();
+
+    throwIfSupabaseError(userError, "Invited user lookup failed.");
+
+    if (!invitedUser) {
+      throw new AppError("User with this email was not found. Ask them to register first.", 404);
+    }
+
+    const { data: existingMembership, error: existingError } = await supabase
+      .from("workspace_members")
+      .select("id, role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", invitedUser.id)
+      .maybeSingle<{ id: string; role: WorkspaceRole }>();
+
+    throwIfSupabaseError(existingError, "Existing membership lookup failed.");
+
+    const { data: membership, error: membershipError } = await supabase
+      .from("workspace_members")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          user_id: invitedUser.id,
+          role: input.role
+        },
+        { onConflict: "workspace_id,user_id" }
+      )
+      .select("id, workspace_id, user_id, role, created_at")
+      .single<{
+        id: string;
+        workspace_id: string;
+        user_id: string;
+        role: WorkspaceRole;
+        created_at: string;
+      }>();
+
+    throwIfSupabaseError(membershipError, "Workspace member upsert failed.");
+
+    if (!membership) {
+      throw new AppError("Workspace member upsert did not return a record.", 500);
+    }
+
+    await logActivity({ query: async () => ({ rows: [] } as never) }, {
+      workspaceId,
+      userId,
+      action:
+        existingMembership && existingMembership.role !== input.role
+          ? "workspace.member_role_updated"
+          : "workspace.member_invited",
+      metadata: {
+        invitedUserId: invitedUser.id,
+        email: invitedUser.email,
+        role: input.role,
+        previousRole: existingMembership?.role ?? null
+      }
+    });
+
+    return mapWorkspaceMember({
+      ...membership,
+      user_name: invitedUser.name,
+      user_email: invitedUser.email
+    } as WorkspaceMemberRow);
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceAdminMembership(client, userId, workspaceId);
 
@@ -226,10 +449,37 @@ export const inviteWorkspaceMember = async (
 };
 
 export const updateWorkspace = async (userId: string, workspaceId: string, name: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceAdminMembership({ query: async () => ({ rows: [] } as never) }, userId, workspaceId);
+
+    const { data: workspace, error } = await supabase
+      .from("workspaces")
+      .update({ name })
+      .eq("id", workspaceId)
+      .select("id, name, created_at")
+      .maybeSingle<WorkspaceBaseRow>();
+
+    throwIfSupabaseError(error, "Workspace update failed.");
+
+    if (!workspace) {
+      throw new AppError("Workspace not found.", 404);
+    }
+
+    await logActivity({ query: async () => ({ rows: [] } as never) }, {
+      workspaceId,
+      userId,
+      action: "workspace.updated",
+      metadata: { name }
+    });
+
+    return mapWorkspace(workspace);
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceAdminMembership(client, userId, workspaceId);
 
-    const result = await client.query<Pick<WorkspaceRow, "id" | "name" | "created_at">>(
+    const result = await client.query<WorkspaceBaseRow>(
       `
         UPDATE workspaces
         SET name = $2
@@ -252,15 +502,29 @@ export const updateWorkspace = async (userId: string, workspaceId: string, name:
       metadata: { name }
     });
 
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      createdAt: workspace.created_at
-    };
+    return mapWorkspace(workspace);
   });
 };
 
 export const deleteWorkspace = async (userId: string, workspaceId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceAdminMembership({ query: async () => ({ rows: [] } as never) }, userId, workspaceId);
+
+    const { error, count } = await supabase
+      .from("workspaces")
+      .delete({ count: "exact" })
+      .eq("id", workspaceId);
+
+    throwIfSupabaseError(error, "Workspace deletion failed.");
+
+    if (!count) {
+      throw new AppError("Workspace not found.", 404);
+    }
+
+    return;
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceAdminMembership(client, userId, workspaceId);
 

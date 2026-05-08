@@ -1,4 +1,5 @@
 import { withTransaction } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { AppError } from "../errors/AppError";
 import { logActivity } from "./activityLogService";
 import {
@@ -43,7 +44,37 @@ const attachRequiredFields = (stages: StageRow[], requiredFields: RequiredFieldR
   }));
 };
 
+const supabaseExecutorStub = { query: async () => ({ rows: [] } as never) };
+
 export const listFunnelStages = async (userId: string, workspaceId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceMembership(supabaseExecutorStub, userId, workspaceId);
+
+    const { data: stages, error: stagesError } = await supabase
+      .from("funnel_stages")
+      .select("id, workspace_id, name, order, color, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("order", { ascending: true });
+
+    throwIfSupabaseError(stagesError, "Funnel stage lookup failed.");
+
+    const stageIds = (stages ?? []).map((stage) => stage.id);
+    let requiredFields: RequiredFieldRow[] = [];
+
+    if (stageIds.length > 0) {
+      const { data, error } = await supabase
+        .from("stage_required_fields")
+        .select("id, stage_id, field_name, is_custom_field")
+        .in("stage_id", stageIds);
+
+      throwIfSupabaseError(error, "Required field lookup for stages failed.");
+      requiredFields = data ?? [];
+    }
+
+    return attachRequiredFields((stages ?? []) as StageRow[], requiredFields);
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceMembership(client, userId, workspaceId);
 
@@ -79,6 +110,48 @@ export const createFunnelStage = async (
   userId: string,
   input: { workspaceId: string; name: string; order: number; color: string }
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceAdminMembership(supabaseExecutorStub, userId, input.workspaceId);
+
+    const { data: stage, error } = await supabase
+      .from("funnel_stages")
+      .insert({
+        workspace_id: input.workspaceId,
+        name: input.name,
+        order: input.order,
+        color: input.color
+      })
+      .select("id, workspace_id, name, order, color, created_at")
+      .single<StageRow>();
+
+    throwIfSupabaseError(error, "Funnel stage creation failed.");
+
+    if (!stage) {
+      throw new AppError("Funnel stage creation did not return a record.", 500);
+    }
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: input.workspaceId,
+      userId,
+      action: "funnel_stage.created",
+      metadata: {
+        stageId: stage.id,
+        name: stage.name
+      }
+    });
+
+    return {
+      id: stage.id,
+      workspaceId: stage.workspace_id,
+      name: stage.name,
+      order: stage.order,
+      color: stage.color,
+      createdAt: stage.created_at,
+      requiredFields: []
+    };
+  }
+
   return withTransaction(async (client) => {
     await assertWorkspaceAdminMembership(client, userId, input.workspaceId);
 
@@ -120,6 +193,68 @@ export const updateFunnelStage = async (
   stageId: string,
   input: Partial<{ name: string; order: number; color: string }>
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data: current, error: currentError } = await supabase
+      .from("funnel_stages")
+      .select("id, workspace_id, name, order, color, created_at")
+      .eq("id", stageId)
+      .maybeSingle<StageRow>();
+
+    throwIfSupabaseError(currentError, "Funnel stage lookup failed.");
+
+    if (!current) {
+      throw new AppError("Funnel stage not found.", 404);
+    }
+
+    await assertWorkspaceAdminMembership(supabaseExecutorStub, userId, current.workspace_id);
+
+    const updates: Partial<{ name: string; order: number; color: string }> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.order !== undefined) updates.order = input.order;
+    if (input.color !== undefined) updates.color = input.color;
+
+    const { data: updated, error: updateError } = await supabase
+      .from("funnel_stages")
+      .update(updates)
+      .eq("id", stageId)
+      .select("id, workspace_id, name, order, color, created_at")
+      .single<StageRow>();
+
+    throwIfSupabaseError(updateError, "Funnel stage update failed.");
+
+    if (!updated) {
+      throw new AppError("Funnel stage update did not return a record.", 500);
+    }
+
+    const { data: requiredFields, error: requiredError } = await supabase
+      .from("stage_required_fields")
+      .select("id, stage_id, field_name, is_custom_field")
+      .eq("stage_id", stageId);
+
+    throwIfSupabaseError(requiredError, "Required field lookup failed.");
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: updated.workspace_id,
+      userId,
+      action: "funnel_stage.updated",
+      metadata: {
+        stageId,
+        updates: input
+      }
+    });
+
+    return {
+      id: updated.id,
+      workspaceId: updated.workspace_id,
+      name: updated.name,
+      order: updated.order,
+      color: updated.color,
+      createdAt: updated.created_at,
+      requiredFields: (requiredFields ?? []).map(mapRequiredField)
+    };
+  }
+
   return withTransaction(async (client) => {
     const currentResult = await client.query<StageRow>(
       `
@@ -189,6 +324,70 @@ export const replaceStageRequiredFields = async (
   stageId: string,
   requiredFields: Array<{ fieldName: string; isCustomField: boolean }>
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data: stage, error: stageError } = await supabase
+      .from("funnel_stages")
+      .select("id, workspace_id, name, order, color, created_at")
+      .eq("id", stageId)
+      .maybeSingle<StageRow>();
+
+    throwIfSupabaseError(stageError, "Funnel stage lookup failed.");
+
+    if (!stage) {
+      throw new AppError("Funnel stage not found.", 404);
+    }
+
+    await assertWorkspaceAdminMembership(supabaseExecutorStub, userId, stage.workspace_id);
+
+    const { error: deleteError } = await supabase
+      .from("stage_required_fields")
+      .delete()
+      .eq("stage_id", stageId);
+
+    throwIfSupabaseError(deleteError, "Required field reset failed.");
+
+    if (requiredFields.length > 0) {
+      const { error: insertError } = await supabase.from("stage_required_fields").insert(
+        requiredFields.map((field) => ({
+          stage_id: stageId,
+          field_name: field.fieldName,
+          is_custom_field: field.isCustomField
+        }))
+      );
+
+      throwIfSupabaseError(insertError, "Required field update failed.");
+    }
+
+    const { data: refreshed, error: refreshedError } = await supabase
+      .from("stage_required_fields")
+      .select("id, stage_id, field_name, is_custom_field")
+      .eq("stage_id", stageId)
+      .order("field_name", { ascending: true });
+
+    throwIfSupabaseError(refreshedError, "Required field refresh failed.");
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: stage.workspace_id,
+      userId,
+      action: "funnel_stage.required_fields_updated",
+      metadata: {
+        stageId,
+        requiredFields
+      }
+    });
+
+    return {
+      id: stage.id,
+      workspaceId: stage.workspace_id,
+      name: stage.name,
+      order: stage.order,
+      color: stage.color,
+      createdAt: stage.created_at,
+      requiredFields: (refreshed ?? []).map(mapRequiredField)
+    };
+  }
+
   return withTransaction(async (client) => {
     const stageResult = await client.query<StageRow>(
       `

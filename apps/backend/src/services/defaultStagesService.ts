@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 
 const DEFAULT_STAGES = [
   { order: 1, name: "Base", color: "#64748b" },
@@ -14,6 +15,23 @@ export const ensureDefaultStagesForWorkspace = async (
   executor: DatabaseExecutor,
   workspaceId: string
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const payload = DEFAULT_STAGES.map((stage) => ({
+      workspace_id: workspaceId,
+      name: stage.name,
+      order: stage.order,
+      color: stage.color
+    }));
+
+    const { error } = await supabase
+      .from("funnel_stages")
+      .upsert(payload, { onConflict: "workspace_id,order", ignoreDuplicates: true });
+
+    throwIfSupabaseError(error, "Default funnel stage provisioning failed.");
+    return;
+  }
+
   for (const stage of DEFAULT_STAGES) {
     await executor.query(
       `

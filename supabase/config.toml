@@ -1,0 +1,7 @@
+project_id = "sdr-crm"
+
+[functions.generate-messages]
+verify_jwt = true
+
+[functions.send-message]
+verify_jwt = true

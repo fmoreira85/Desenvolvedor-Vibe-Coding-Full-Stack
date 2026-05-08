@@ -8,5 +8,9 @@
   "scripts": {
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "supabase": "^2.98.2",
+    "ws": "^8.20.0"
   }
 }

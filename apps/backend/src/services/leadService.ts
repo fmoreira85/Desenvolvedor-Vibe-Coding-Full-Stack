@@ -1,5 +1,6 @@
 import { database, query, withTransaction } from "../db/helpers";
 import type { DatabaseExecutor } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { AppError } from "../errors/AppError";
 import type { CustomFieldInput } from "../types/domain";
 import { logActivity } from "./activityLogService";
@@ -30,6 +31,37 @@ type LeadBaseRow = {
   stage_color: string;
 };
 
+type LeadRecord = {
+  id: string;
+  workspace_id: string;
+  stage_id: string;
+  assigned_user_id: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  role: string | null;
+  lead_source: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type StageRecord = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  order: number;
+  color: string;
+  created_at: string;
+};
+
+type UserRecord = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 type LeadCustomValueRow = {
   lead_id: string;
   custom_field_id: string;
@@ -42,6 +74,8 @@ type RequiredFieldRow = {
   field_name: string;
   is_custom_field: boolean;
 };
+
+const supabaseExecutorStub = { query: async () => ({ rows: [] } as never) };
 
 const normalizeCustomFieldValues = (input: unknown): CustomFieldInput[] => {
   if (input === undefined) {
@@ -112,11 +146,173 @@ const mapLead = (lead: LeadBaseRow, customValues: LeadCustomValueRow[]) => ({
     }))
 });
 
+const mapSupabaseLeadRow = (
+  lead: LeadRecord,
+  stagesById: Map<string, StageRecord>,
+  usersById: Map<string, UserRecord>,
+  customValues: LeadCustomValueRow[]
+): LeadBaseRow => {
+  const stage = stagesById.get(lead.stage_id);
+
+  if (!stage) {
+    throw new AppError("Lead stage not found for workspace.", 500);
+  }
+
+  const assignedUser = lead.assigned_user_id ? usersById.get(lead.assigned_user_id) ?? null : null;
+
+  return {
+    ...lead,
+    assigned_user_name: assignedUser?.name ?? null,
+    assigned_user_email: assignedUser?.email ?? null,
+    stage_name: stage.name,
+    stage_order: stage.order,
+    stage_color: stage.color
+  };
+};
+
+const fetchCustomValues = async (executor: DatabaseExecutor, leadIds: string[]) => {
+  if (leadIds.length === 0) {
+    return [];
+  }
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data: valueRows, error: valuesError } = await supabase
+      .from("lead_custom_values")
+      .select("lead_id, custom_field_id, value")
+      .in("lead_id", leadIds);
+
+    throwIfSupabaseError(valuesError, "Lead custom value lookup failed.");
+
+    const customFieldIds = Array.from(
+      new Set((valueRows ?? []).map((row) => row.custom_field_id))
+    );
+
+    if (customFieldIds.length === 0) {
+      return [];
+    }
+
+    const { data: customFields, error: fieldsError } = await supabase
+      .from("custom_fields")
+      .select("id, name, field_type")
+      .in("id", customFieldIds);
+
+    throwIfSupabaseError(fieldsError, "Custom field lookup failed.");
+
+    const fieldsById = new Map((customFields ?? []).map((field) => [field.id, field]));
+
+    return (valueRows ?? [])
+      .map((row) => {
+        const field = fieldsById.get(row.custom_field_id);
+
+        if (!field) {
+          return null;
+        }
+
+        return {
+          lead_id: row.lead_id,
+          custom_field_id: row.custom_field_id,
+          custom_field_name: field.name,
+          field_type: field.field_type,
+          value: row.value
+        } satisfies LeadCustomValueRow;
+      })
+      .filter((row): row is LeadCustomValueRow => Boolean(row));
+  }
+
+  const result = await executor.query<LeadCustomValueRow>(
+    `
+      SELECT
+        lcv.lead_id,
+        lcv.custom_field_id,
+        cf.name AS custom_field_name,
+        cf.field_type,
+        lcv.value
+      FROM lead_custom_values lcv
+      INNER JOIN custom_fields cf ON cf.id = lcv.custom_field_id
+      WHERE lcv.lead_id = ANY($1::uuid[])
+    `,
+    [leadIds]
+  );
+
+  return result.rows;
+};
+
 const fetchLeadRows = async (
   executor: DatabaseExecutor,
   whereClause: string,
   values: unknown[]
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const workspaceId = String(values[0]);
+    let request = supabase
+      .from("leads")
+      .select(
+        "id, workspace_id, stage_id, assigned_user_id, name, email, phone, company, role, lead_source, notes, created_at, updated_at"
+      )
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (whereClause === "WHERE l.id = $1") {
+      request = supabase
+        .from("leads")
+        .select(
+          "id, workspace_id, stage_id, assigned_user_id, name, email, phone, company, role, lead_source, notes, created_at, updated_at"
+        )
+        .eq("id", String(values[0]));
+    } else {
+      const [, stageId, assignedTo, search] = values;
+
+      if (stageId) {
+        request = request.eq("stage_id", String(stageId));
+      }
+
+      if (assignedTo) {
+        request = request.eq("assigned_user_id", String(assignedTo));
+      }
+
+      if (search) {
+        const normalizedSearch = String(search).replace(/%/g, "");
+        request = request.or(`name.ilike.%${normalizedSearch}%,company.ilike.%${normalizedSearch}%`);
+      }
+    }
+
+    const { data: leads, error: leadsError } = await request;
+    throwIfSupabaseError(leadsError, "Lead lookup failed.");
+
+    const leadRows = (leads ?? []) as LeadRecord[];
+    const workspaceIds = Array.from(new Set(leadRows.map((lead) => lead.workspace_id)));
+    const stageIds = Array.from(new Set(leadRows.map((lead) => lead.stage_id)));
+    const assignedUserIds = Array.from(
+      new Set(leadRows.map((lead) => lead.assigned_user_id).filter(Boolean) as string[])
+    );
+
+    const [{ data: stages, error: stagesError }, { data: users, error: usersError }] =
+      await Promise.all([
+        stageIds.length > 0
+          ? supabase
+              .from("funnel_stages")
+              .select("id, workspace_id, name, order, color, created_at")
+              .in("id", stageIds)
+          : Promise.resolve({ data: [], error: null }),
+        assignedUserIds.length > 0
+          ? supabase.from("users").select("id, name, email").in("id", assignedUserIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+    throwIfSupabaseError(stagesError, "Lead stage lookup failed.");
+    throwIfSupabaseError(usersError, "Assigned user lookup failed.");
+
+    const stagesById = new Map((stages ?? []).map((stage) => [stage.id, stage as StageRecord]));
+    const usersById = new Map((users ?? []).map((user) => [user.id, user as UserRecord]));
+
+    return {
+      rows: leadRows.map((lead) => mapSupabaseLeadRow(lead, stagesById, usersById, []))
+    };
+  }
+
   return executor.query<LeadBaseRow>(
     `
       SELECT
@@ -148,34 +344,29 @@ const fetchLeadRows = async (
   );
 };
 
-const fetchCustomValues = async (executor: DatabaseExecutor, leadIds: string[]) => {
-  if (leadIds.length === 0) {
-    return [];
-  }
-
-  const result = await executor.query<LeadCustomValueRow>(
-    `
-      SELECT
-        lcv.lead_id,
-        lcv.custom_field_id,
-        cf.name AS custom_field_name,
-        cf.field_type,
-        lcv.value
-      FROM lead_custom_values lcv
-      INNER JOIN custom_fields cf ON cf.id = lcv.custom_field_id
-      WHERE lcv.lead_id = ANY($1::uuid[])
-    `,
-    [leadIds]
-  );
-
-  return result.rows;
-};
-
 const findWorkspaceStage = async (
   executor: DatabaseExecutor,
   workspaceId: string,
   stageId: string
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("funnel_stages")
+      .select("id")
+      .eq("id", stageId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    throwIfSupabaseError(error, "Stage lookup failed.");
+
+    if (!data) {
+      throw new AppError("Stage does not belong to this workspace.", 400);
+    }
+
+    return;
+  }
+
   const result = await executor.query<{ id: string }>(
     `
       SELECT id
@@ -191,6 +382,25 @@ const findWorkspaceStage = async (
 };
 
 const findDefaultStageForWorkspace = async (executor: DatabaseExecutor, workspaceId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("funnel_stages")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .order("order", { ascending: true })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    throwIfSupabaseError(error, "Default stage lookup failed.");
+
+    if (!data) {
+      throw new AppError("Workspace does not have funnel stages configured.", 400);
+    }
+
+    return data.id;
+  }
+
   const result = await executor.query<{ id: string }>(
     `
       SELECT id
@@ -217,6 +427,48 @@ const upsertCustomFieldValues = async (
   leadId: string,
   customFieldValues: CustomFieldInput[]
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+
+    for (const item of customFieldValues) {
+      const { data: fieldValidation, error: fieldError } = await supabase
+        .from("custom_fields")
+        .select("id")
+        .eq("id", item.customFieldId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+
+      throwIfSupabaseError(fieldError, "Custom field validation failed.");
+
+      if (!fieldValidation) {
+        throw new AppError("Custom field does not belong to the workspace.", 400);
+      }
+
+      if (item.value === null || item.value.length === 0) {
+        const { error: deleteError } = await supabase
+          .from("lead_custom_values")
+          .delete()
+          .eq("lead_id", leadId)
+          .eq("custom_field_id", item.customFieldId);
+
+        throwIfSupabaseError(deleteError, "Lead custom value deletion failed.");
+      } else {
+        const { error: upsertError } = await supabase.from("lead_custom_values").upsert(
+          {
+            lead_id: leadId,
+            custom_field_id: item.customFieldId,
+            value: item.value
+          },
+          { onConflict: "lead_id,custom_field_id" }
+        );
+
+        throwIfSupabaseError(upsertError, "Lead custom value upsert failed.");
+      }
+    }
+
+    return;
+  }
+
   for (const item of customFieldValues) {
     const fieldValidation = await executor.query(
       `
@@ -330,6 +582,61 @@ export const createLead = async (
 ) => {
   const customFieldValues = normalizeCustomFieldValues(input.customFieldValues);
 
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    await assertWorkspaceMembership(supabaseExecutorStub, userId, input.workspaceId);
+
+    const stageId =
+      input.stageId && input.stageId.length > 0
+        ? input.stageId
+        : await findDefaultStageForWorkspace(supabaseExecutorStub, input.workspaceId);
+
+    await findWorkspaceStage(supabaseExecutorStub, input.workspaceId, stageId);
+
+    if (input.assignedUserId) {
+      await assertAssignableWorkspaceMember(supabaseExecutorStub, input.workspaceId, input.assignedUserId);
+    }
+
+    const { data: insertedLead, error: insertError } = await supabase
+      .from("leads")
+      .insert({
+        workspace_id: input.workspaceId,
+        stage_id: stageId,
+        assigned_user_id: input.assignedUserId ?? null,
+        name: input.name,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        company: input.company ?? null,
+        role: input.role ?? null,
+        lead_source: input.leadSource ?? null,
+        notes: input.notes ?? null
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    throwIfSupabaseError(insertError, "Lead creation failed.");
+
+    if (!insertedLead) {
+      throw new AppError("Lead creation did not return a record.", 500);
+    }
+
+    await upsertCustomFieldValues(supabaseExecutorStub, input.workspaceId, insertedLead.id, customFieldValues);
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: input.workspaceId,
+      leadId: insertedLead.id,
+      userId,
+      action: "lead.created",
+      metadata: {
+        stageId
+      }
+    });
+
+    void triggerCampaignsForLead(insertedLead.id, userId).catch(() => undefined);
+
+    return getLeadById(userId, insertedLead.id);
+  }
+
   const lead = await withTransaction(async (client) => {
     await assertWorkspaceMembership(client, userId, input.workspaceId);
 
@@ -415,6 +722,65 @@ export const updateLead = async (
 ) => {
   const customFieldValues = normalizeCustomFieldValues(input.customFieldValues);
 
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { lead } = await fetchLeadForValidation(supabaseExecutorStub, leadId);
+    await assertWorkspaceMembership(supabaseExecutorStub, userId, lead.workspace_id);
+
+    const stageId = input.stageId === undefined ? lead.stage_id : (input.stageId ?? lead.stage_id);
+    const assignedUserId =
+      input.assignedUserId === undefined ? lead.assigned_user_id : input.assignedUserId;
+    const email = input.email === undefined ? lead.email : input.email;
+    const phone = input.phone === undefined ? lead.phone : input.phone;
+    const company = input.company === undefined ? lead.company : input.company;
+    const role = input.role === undefined ? lead.role : input.role;
+    const leadSource = input.leadSource === undefined ? lead.lead_source : input.leadSource;
+    const notes = input.notes === undefined ? lead.notes : input.notes;
+
+    if (stageId !== lead.stage_id) {
+      await findWorkspaceStage(supabaseExecutorStub, lead.workspace_id, stageId);
+    }
+
+    if (assignedUserId) {
+      await assertAssignableWorkspaceMember(supabaseExecutorStub, lead.workspace_id, assignedUserId);
+    }
+
+    const updates: Record<string, unknown> = {
+      stage_id: stageId,
+      assigned_user_id: assignedUserId,
+      email,
+      phone,
+      company,
+      role,
+      lead_source: leadSource,
+      notes,
+      updated_at: new Date().toISOString()
+    };
+
+    if (input.name !== undefined) {
+      updates.name = input.name ?? lead.name;
+    }
+
+    const { error: updateError } = await supabase.from("leads").update(updates).eq("id", leadId);
+    throwIfSupabaseError(updateError, "Lead update failed.");
+
+    await upsertCustomFieldValues(supabaseExecutorStub, lead.workspace_id, leadId, customFieldValues);
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: lead.workspace_id,
+      leadId,
+      userId,
+      action: "lead.updated",
+      metadata: input
+    });
+
+    if (input.stageId && input.stageId !== lead.stage_id) {
+      void triggerCampaignsForLead(leadId, userId).catch(() => undefined);
+    }
+
+    return getLeadById(userId, leadId);
+  }
+
   const result = await withTransaction(async (client) => {
     const { lead } = await fetchLeadForValidation(client, leadId);
     await assertWorkspaceMembership(client, userId, lead.workspace_id);
@@ -492,6 +858,24 @@ export const updateLead = async (
 };
 
 export const deleteLead = async (userId: string, leadId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { lead } = await fetchLeadForValidation(supabaseExecutorStub, leadId);
+    await assertWorkspaceMembership(supabaseExecutorStub, userId, lead.workspace_id);
+
+    const { error: deleteError } = await supabase.from("leads").delete().eq("id", leadId);
+    throwIfSupabaseError(deleteError, "Lead deletion failed.");
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: lead.workspace_id,
+      leadId,
+      userId,
+      action: "lead.deleted"
+    });
+
+    return;
+  }
+
   await withTransaction(async (client) => {
     const { lead } = await fetchLeadForValidation(client, leadId);
     await assertWorkspaceMembership(client, userId, lead.workspace_id);
@@ -512,6 +896,20 @@ const resolveCustomRequirement = async (
   workspaceId: string,
   fieldName: string
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("custom_fields")
+      .select("id, name")
+      .eq("workspace_id", workspaceId)
+      .or(`id.eq.${fieldName},name.eq.${fieldName}`)
+      .limit(1)
+      .maybeSingle<{ id: string; name: string }>();
+
+    throwIfSupabaseError(error, "Custom requirement lookup failed.");
+    return data ?? null;
+  }
+
   const result = await executor.query<{ id: string; name: string }>(
     `
       SELECT id, name
@@ -534,18 +932,33 @@ export const validateLeadStageRequirements = async (
 ) => {
   const { lead, customValues } = await fetchLeadForValidation(executor, leadId);
 
-  const requiredFieldsResult = await executor.query<RequiredFieldRow>(
-    `
-      SELECT field_name, is_custom_field
-      FROM stage_required_fields
-      WHERE stage_id = $1
-    `,
-    [stageId]
-  );
+  let requiredFieldsRows: RequiredFieldRow[];
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("stage_required_fields")
+      .select("field_name, is_custom_field")
+      .eq("stage_id", stageId);
+
+    throwIfSupabaseError(error, "Stage requirement lookup failed.");
+    requiredFieldsRows = (data ?? []) as RequiredFieldRow[];
+  } else {
+    const requiredFieldsResult = await executor.query<RequiredFieldRow>(
+      `
+        SELECT field_name, is_custom_field
+        FROM stage_required_fields
+        WHERE stage_id = $1
+      `,
+      [stageId]
+    );
+
+    requiredFieldsRows = requiredFieldsResult.rows;
+  }
 
   const missingFields: string[] = [];
 
-  for (const requiredField of requiredFieldsResult.rows) {
+  for (const requiredField of requiredFieldsRows) {
     if (requiredField.is_custom_field) {
       const customField = await resolveCustomRequirement(
         executor,
@@ -589,6 +1002,35 @@ export const validateLeadStageRequirements = async (
 };
 
 export const moveLeadToStage = async (userId: string, leadId: string, stageId: string) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { lead } = await fetchLeadForValidation(supabaseExecutorStub, leadId);
+    await assertWorkspaceMembership(supabaseExecutorStub, userId, lead.workspace_id);
+    await findWorkspaceStage(supabaseExecutorStub, lead.workspace_id, stageId);
+    await validateLeadStageRequirements(supabaseExecutorStub, leadId, stageId);
+
+    const { error: updateError } = await supabase
+      .from("leads")
+      .update({ stage_id: stageId, updated_at: new Date().toISOString() })
+      .eq("id", leadId);
+
+    throwIfSupabaseError(updateError, "Lead stage update failed.");
+
+    await logActivity(supabaseExecutorStub, {
+      workspaceId: lead.workspace_id,
+      leadId,
+      userId,
+      action: "lead.stage_changed",
+      metadata: {
+        fromStageId: lead.stage_id,
+        toStageId: stageId
+      }
+    });
+
+    void triggerCampaignsForLead(leadId, userId).catch(() => undefined);
+    return getLeadById(userId, leadId);
+  }
+
   await withTransaction(async (client) => {
     const { lead } = await fetchLeadForValidation(client, leadId);
     await assertWorkspaceMembership(client, userId, lead.workspace_id);
@@ -623,6 +1065,28 @@ export const moveLeadToStage = async (userId: string, leadId: string, stageId: s
 
 export const getLeadMessages = async (userId: string, leadId: string) => {
   const lead = await getLeadById(userId, leadId);
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("generated_messages")
+      .select("id, campaign_id, messages, generated_at, sent_at")
+      .eq("lead_id", leadId)
+      .order("generated_at", { ascending: false });
+
+    throwIfSupabaseError(error, "Lead message lookup failed.");
+
+    return {
+      leadId: lead.id,
+      items: (data ?? []).map((item) => ({
+        id: item.id,
+        campaignId: item.campaign_id,
+        messages: item.messages,
+        generatedAt: item.generated_at,
+        sentAt: item.sent_at
+      }))
+    };
+  }
 
   const result = await query<{
     id: string;

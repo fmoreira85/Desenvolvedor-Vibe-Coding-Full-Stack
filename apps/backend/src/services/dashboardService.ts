@@ -1,8 +1,72 @@
 import { database, query } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { assertWorkspaceMembership } from "./workspaceMembershipService";
+
+const supabaseExecutorStub = { query: async () => ({ rows: [] } as never) };
 
 export const getDashboardMetrics = async (userId: string, workspaceId: string) => {
   await assertWorkspaceMembership(database, userId, workspaceId);
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+
+    const [
+      { count: totalLeads, error: totalLeadsError },
+      { count: totalCampaigns, error: totalCampaignsError },
+      { data: generatedMessages, error: generatedMessagesError },
+      { data: stages, error: stagesError },
+      { data: leads, error: leadsError }
+    ] = await Promise.all([
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("generated_messages")
+        .select("id, sent_at, lead_id"),
+      supabase
+        .from("funnel_stages")
+        .select("id, name, order, color")
+        .eq("workspace_id", workspaceId)
+        .order("order", { ascending: true }),
+      supabase.from("leads").select("id, stage_id").eq("workspace_id", workspaceId)
+    ]);
+
+    throwIfSupabaseError(totalLeadsError, "Dashboard lead count failed.");
+    throwIfSupabaseError(totalCampaignsError, "Dashboard campaign count failed.");
+    throwIfSupabaseError(generatedMessagesError, "Dashboard generated message lookup failed.");
+    throwIfSupabaseError(stagesError, "Dashboard stage lookup failed.");
+    throwIfSupabaseError(leadsError, "Dashboard lead stage lookup failed.");
+
+    const workspaceLeadIds = new Set((leads ?? []).map((lead) => lead.id));
+    const filteredMessages = (generatedMessages ?? []).filter((message) =>
+      workspaceLeadIds.has(message.lead_id)
+    );
+    const leadCountsByStage = new Map<string, number>();
+
+    for (const lead of leads ?? []) {
+      leadCountsByStage.set(lead.stage_id, (leadCountsByStage.get(lead.stage_id) ?? 0) + 1);
+    }
+
+    return {
+      workspaceId,
+      totalLeads: totalLeads ?? 0,
+      totalCampaigns: totalCampaigns ?? 0,
+      totalGeneratedMessages: filteredMessages.length,
+      totalSentMessages: filteredMessages.filter((message) => Boolean(message.sent_at)).length,
+      leadsByStage: (stages ?? []).map((stage) => ({
+        stageId: stage.id,
+        name: stage.name,
+        order: stage.order,
+        color: stage.color,
+        count: leadCountsByStage.get(stage.id) ?? 0
+      }))
+    };
+  }
 
   const [totalsResult, stagesResult] = await Promise.all([
     query<{

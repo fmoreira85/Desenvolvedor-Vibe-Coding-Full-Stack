@@ -1,5 +1,6 @@
 import { AppError } from "../errors/AppError";
 import { database, query } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { assertWorkspaceMembership } from "./workspaceMembershipService";
 
 export const listActivityLogs = async (
@@ -11,6 +12,77 @@ export const listActivityLogs = async (
   }
 
   let workspaceId = filters.workspaceId ?? null;
+
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+
+    if (!workspaceId && filters.leadId) {
+      const { data: lookup, error: lookupError } = await supabase
+        .from("leads")
+        .select("workspace_id")
+        .eq("id", filters.leadId)
+        .maybeSingle<{ workspace_id: string }>();
+
+      throwIfSupabaseError(lookupError, "Lead workspace lookup for activity logs failed.");
+      workspaceId = lookup?.workspace_id ?? null;
+    }
+
+    if (!workspaceId) {
+      throw new AppError("Workspace not found for activity log query.", 404);
+    }
+
+    await assertWorkspaceMembership(database, userId, workspaceId);
+
+    let request = supabase
+      .from("activity_logs")
+      .select("id, lead_id, workspace_id, user_id, action, metadata, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+
+    if (filters.leadId) {
+      request = request.eq("lead_id", filters.leadId);
+    }
+
+    const { data: logs, error: logsError } = await request;
+    throwIfSupabaseError(logsError, "Activity log lookup failed.");
+
+    const userIds = Array.from(
+      new Set((logs ?? []).map((item) => item.user_id).filter(Boolean) as string[])
+    );
+
+    let usersById = new Map<string, { id: string; name: string; email: string }>();
+
+    if (userIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from("users")
+        .select("id, name, email")
+        .in("id", userIds);
+
+      throwIfSupabaseError(usersError, "Activity actor lookup failed.");
+      usersById = new Map((users ?? []).map((user) => [user.id, user]));
+    }
+
+    return (logs ?? []).map((item) => {
+      const actor = item.user_id ? usersById.get(item.user_id) ?? null : null;
+
+      return {
+        id: item.id,
+        leadId: item.lead_id,
+        workspaceId: item.workspace_id,
+        userId: item.user_id,
+        action: item.action,
+        metadata: item.metadata,
+        createdAt: item.created_at,
+        actor: actor
+          ? {
+              id: actor.id,
+              name: actor.name,
+              email: actor.email
+            }
+          : null
+      };
+    });
+  }
 
   if (!workspaceId && filters.leadId) {
     const lookup = await query<{ workspace_id: string }>(

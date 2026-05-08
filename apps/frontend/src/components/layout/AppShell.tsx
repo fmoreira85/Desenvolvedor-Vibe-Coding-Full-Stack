@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useActiveWorkspace } from "../../hooks/useActiveWorkspace";
 import { useSessionStore } from "../../hooks/useSessionStore";
+import { authApi } from "../../services/api/authApi";
 import { cn } from "../../utils/cn";
 
 const navigationItems = [
@@ -70,7 +71,8 @@ export const AppShell = () => {
           <div className="border-t border-border/70 p-6">
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                await authApi.logout();
                 logout();
                 navigate("/auth");
               }}
@@ -125,7 +127,8 @@ export const AppShell = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    await authApi.logout();
                     logout();
                     navigate("/auth");
                   }}

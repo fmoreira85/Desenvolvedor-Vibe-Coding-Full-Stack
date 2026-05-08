@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { useSessionStore } from "../../hooks/useSessionStore";
+import { signOutSupabaseSession } from "../supabase/client";
 
 export const apiClient = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL ?? "http://localhost:3001"}/api`
@@ -20,10 +21,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && useSessionStore.getState().token) {
-      useSessionStore.getState().logout();
-      if (window.location.pathname !== "/auth") {
-        window.location.assign("/auth");
-      }
+      void signOutSupabaseSession().finally(() => {
+        useSessionStore.getState().logout();
+        if (window.location.pathname !== "/auth") {
+          window.location.assign("/auth");
+        }
+      });
     }
 
     return Promise.reject(error);

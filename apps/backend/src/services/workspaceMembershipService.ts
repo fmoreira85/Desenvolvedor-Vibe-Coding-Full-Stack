@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "../db/helpers";
+import { getSupabaseAdminClient, isSupabaseDataEnabled, throwIfSupabaseError } from "../db/supabase";
 import { AppError } from "../errors/AppError";
 import type { WorkspaceRole } from "../types/domain";
 
@@ -12,6 +13,24 @@ export const assertWorkspaceMembership = async (
   userId: string,
   workspaceId: string
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .select("workspace_id, role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle<WorkspaceMembershipRow>();
+
+    throwIfSupabaseError(error, "Workspace access lookup failed.");
+
+    if (!data) {
+      throw new AppError("Workspace access denied.", 403);
+    }
+
+    return data;
+  }
+
   const result = await executor.query<WorkspaceMembershipRow>(
     `
       SELECT workspace_id, role
@@ -49,6 +68,24 @@ export const assertAssignableWorkspaceMember = async (
   workspaceId: string,
   userId: string
 ) => {
+  if (isSupabaseDataEnabled()) {
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    throwIfSupabaseError(error, "Assignable member lookup failed.");
+
+    if (!data) {
+      throw new AppError("Assigned user must belong to the same workspace.", 400);
+    }
+
+    return;
+  }
+
   const result = await executor.query(
     `
       SELECT 1
