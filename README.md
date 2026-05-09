@@ -2,6 +2,11 @@
 
 Mini CRM para equipes de SDR com autenticacao, gestao de leads em kanban, campanhas de abordagem e geracao de mensagens com IA.
 
+## Link do Video
+
+- Apresentação: https://drive.google.com/file/d/1Wqi3cKN8-Jmg7kCKhcWyd-m3eb1RnLhZ/view?usp=sharing
+
+
 ## Link do Sistema
 
 - Producao: https://superb-cranachan-294219.netlify.app
