@@ -1,5 +1,4 @@
 export type HealthResponse = {
-  service: "backend";
-  status: "ok";
-  timestamp: string;
+  ok: true;
+  service: "sdr-crm-backend";
 };

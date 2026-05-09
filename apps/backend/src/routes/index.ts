@@ -15,12 +15,11 @@ export const apiRouter = Router();
 
 apiRouter.get("/health", (_request: Request, response: Response) => {
   const payload: HealthResponse = {
-    service: "backend",
-    status: "ok",
-    timestamp: new Date().toISOString()
+    ok: true,
+    service: "sdr-crm-backend"
   };
 
-  response.json(payload);
+  response.status(200).json(payload);
 });
 
 apiRouter.use("/auth", authRouter);
