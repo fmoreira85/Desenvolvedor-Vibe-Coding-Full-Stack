@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SDR CRM — Design Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Inter', sans-serif; }
+body { background: #F8FAFC; color: #0F172A; font-size: 13px; }
+
+.tabs { display: flex; gap: 4px; padding: 10px 14px 0; background: #1E293B; }
+.tab { padding: 8px 16px; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 12px; font-weight: 500; color: #94A3B8; background: transparent; border: none; transition: all .2s; }
+.tab.active { background: #F8FAFC; color: #0F172A; }
+.tab:hover:not(.active) { color: #E2E8F0; background: rgba(255,255,255,.08); }
+
+.shell { display: flex; height: calc(100vh - 44px); overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar { width: 214px; min-width: 214px; background: #0F172A; display: flex; flex-direction: column; }
+.sb-logo { padding: 16px 14px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.logo-row { display: flex; align-items: center; gap: 8px; }
+.logo-mark { width: 28px; height: 28px; border-radius: 8px; background: #1818EB; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink:0; }
+.brand { font-weight: 700; color: #F1F5F9; font-size: 14px; }
+.ws-pill { margin-top: 9px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #94A3B8; font-size: 10px; }
+.ws-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; }
+.nav-section { padding: 14px 8px 4px; }
+.nav-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #475569; padding: 0 6px; margin-bottom: 3px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; color: #94A3B8; font-size: 12px; cursor: pointer; margin-bottom: 2px; transition: all .15s; }
+.nav-item:hover { background: rgba(255,255,255,.05); color: #E2E8F0; }
+.nav-item.active { background: #1E293B; color: #fff; border-left: 2px solid #1818EB; padding-left: 8px; }
+.nav-ico { width: 15px; height: 15px; }
+.sb-foot { margin-top: auto; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; }
+.av { width: 28px; height: 28px; border-radius: 50%; background: #1818EB; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink:0; }
+.av.sm { width: 22px; height: 22px; font-size: 9px; }
+.av.xs { width: 18px; height: 18px; font-size: 8px; }
+.u-name { color: #E2E8F0; font-size: 11px; font-weight: 500; }
+.u-role { color: #64748B; font-size: 10px; }
+
+/* MAIN */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.navbar { height: 50px; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-bottom: 1px solid #E2E8F0; display: flex; align-items: center; padding: 0 18px; gap: 10px; flex-shrink: 0; }
+.pg-title { font-size: 14px; font-weight: 600; flex: 1; }
+.srch-btn { display: flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid #E2E8F0; border-radius: 8px; color: #94A3B8; font-size: 11px; background: #F8FAFC; cursor: pointer; }
+.srch-btn kbd { background: #E2E8F0; border-radius: 3px; padding: 1px 4px; font-size: 9px; }
+.ico-btn { width: 30px; height: 30px; border-radius: 7px; border: 1px solid #E2E8F0; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+.ws-sel { padding: 4px 9px; border: 1px solid #E2E8F0; border-radius: 7px; font-size: 11px; background: #fff; color: #0F172A; }
+.content { flex: 1; overflow-y: auto; padding: 18px; }
+
+/* BADGE */
+.badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.b-blue   { background: #EFF6FF; color: #1818EB; }
+.b-green  { background: #DCFCE7; color: #16A34A; }
+.b-amber  { background: #FEF9C3; color: #CA8A04; }
+.b-slate  { background: #F1F5F9; color: #475569; }
+.b-red    { background: #FEE2E2; color: #DC2626; }
+.b-purple { background: #F3E8FF; color: #9333EA; }
+
+/* KPI CARDS */
+.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 18px; }
+.kpi { background: #fff; border-radius: 12px; border: 1px solid #E2E8F0; padding: 16px; display: flex; justify-content: space-between; align-items: flex-start; }
+.kpi-lbl { font-size: 11px; color: #64748B; margin-bottom: 3px; font-weight: 500; }
+.kpi-val { font-size: 24px; font-weight: 700; line-height: 1; }
+.kpi-trend { margin-top: 7px; display: inline-flex; align-items: center; font-size: 10px; padding: 2px 6px; border-radius: 20px; font-weight: 600; }
+.kpi-ico { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.ico-blue   { background: #EFF6FF; }
+.ico-green  { background: #DCFCE7; }
+.ico-amber  { background: #FEF9C3; }
+.ico-purple { background: #F3E8FF; }
+
+/* CHART */
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.card { background: #fff; border-radius: 12px; border: 1px solid #E2E8F0; padding: 16px; }
+.card-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.bar-chart { display: flex; flex-direction: column; gap: 7px; }
+.bar-row { display: flex; align-items: center; gap: 7px; }
+.bar-lbl { width: 105px; font-size: 10px; color: #64748B; text-align: right; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 18px; background: #F1F5F9; border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#1818EB,#6366F1); display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; }
+.bar-n { font-size: 9px; color: #fff; font-weight: 600; }
+
+/* TABLE */
+.dt { width: 100%; border-collapse: collapse; }
+.dt th { font-size: 10px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: .05em; padding: 7px 9px; border-bottom: 1px solid #E2E8F0; text-align: left; }
+.dt td { padding: 9px; border-bottom: 1px solid #F1F5F9; font-size: 11px; vertical-align: middle; }
+.dt tr:last-child td { border-bottom: none; }
+.dt tr:hover td { background: #F8FAFC; }
+.lead-cell { display: flex; align-items: center; gap: 7px; }
+.l-name { font-weight: 500; font-size: 12px; }
+.l-co { font-size: 10px; color: #94A3B8; }
+.btn-g { background: none; border: 1px solid #E2E8F0; border-radius: 6px; padding: 3px 8px; font-size: 10px; color: #64748B; cursor: pointer; }
+
+/* KANBAN */
+.kb-toolbar { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; }
+.inp { padding: 7px 11px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 11px; background: #fff; }
+.sel { padding: 7px 10px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 11px; background: #fff; }
+.btn-p { padding: 7px 13px; background: #1818EB; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; margin-left: auto; }
+.kb-board { display: flex; gap: 11px; overflow-x: auto; padding-bottom: 6px; }
+.kb-col { width: 210px; min-width: 210px; background: #F1F5F9; border-radius: 12px; padding: 11px; flex-shrink: 0; }
+.col-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.col-title { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
+.cdot { width: 7px; height: 7px; border-radius: 50%; }
+.col-cnt { font-size: 10px; background: #E2E8F0; color: #475569; padding: 1px 5px; border-radius: 9px; font-weight: 600; }
+.lcard { background: #fff; border-radius: 9px; border: 1px solid #E2E8F0; padding: 11px; margin-bottom: 7px; cursor: grab; }
+.lcard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.lc-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.lc-co { font-size: 10px; color: #64748B; margin-bottom: 7px; }
+.lc-foot { display: flex; align-items: center; justify-content: space-between; }
+
+/* CAMPAIGNS */
+.camp-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.camp-card { background: #fff; border-radius: 12px; border: 1px solid #E2E8F0; padding: 15px; }
+.camp-hd { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.camp-name { font-size: 13px; font-weight: 600; }
+.camp-ctx { font-size: 10px; color: #64748B; margin-bottom: 9px; line-height: 1.5; }
+.camp-meta { font-size: 10px; color: #94A3B8; margin-bottom: 9px; }
+.msg-prev { background: #F8FAFC; border-radius: 7px; padding: 8px 10px; font-size: 10px; color: #475569; line-height: 1.5; border: 1px solid #E2E8F0; margin-bottom: 9px; }
+.camp-ft { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #F1F5F9; padding-top: 9px; }
+.sw { width: 30px; height: 17px; background: #22C55E; border-radius: 9px; position: relative; cursor: pointer; }
+.sw-d { position: absolute; right: 3px; top: 2.5px; width: 12px; height: 12px; background: #fff; border-radius: 50%; }
+.sw.off { background: #E2E8F0; }
+.sw.off .sw-d { right: auto; left: 3px; }
+
+/* SETTINGS */
+.s-tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid #E2E8F0; }
+.s-tab { padding: 7px 13px; font-size: 12px; cursor: pointer; color: #64748B; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.s-tab.active { color: #1818EB; border-bottom-color: #1818EB; font-weight: 600; }
+.field-row { display: flex; align-items: center; padding: 9px 0; border-bottom: 1px solid #F1F5F9; gap: 8px; }
+.f-name { flex: 1; font-size: 12px; font-weight: 500; }
+.stage-row { display: flex; align-items: center; gap: 7px; padding: 7px 9px; background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; margin-bottom: 5px; }
+.grip { color: #CBD5E1; cursor: grab; }
+.color-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; }
+.s-name { flex: 1; font-size: 12px; }
+.req-b { font-size: 9px; background: #EFF6FF; color: #1818EB; padding: 2px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" onclick="show('dashboard',this)">📊 Dashboard</button>
+  <button class="tab" onclick="show('kanban',this)">🗂️ Kanban</button>
+  <button class="tab" onclick="show('campaigns',this)">📣 Campanhas</button>
+  <button class="tab" onclick="show('settings',this)">⚙️ Configurações</button>
+</div>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="logo-row"><div class="logo-mark">S</div><span class="brand">SDR CRM</span></div>
+      <div class="ws-pill"><span class="ws-dot"></span>Workspace Vendas</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-lbl">Principal</div>
+      <div class="nav-item active" id="n-dashboard" onclick="show('dashboard',null)">
+        <svg class="nav-ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard
+      </div>
+      <div class="nav-item" id="n-kanban" onclick="show('kanban',null)">
+        <svg class="nav-ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="13"/><rect x="17" y="3" width="4" height="16"/></svg>Leads
+      </div>
+      <div class="nav-item" id="n-campaigns" onclick="show('campaigns',null)">
+        <svg class="nav-ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>Campanhas
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-lbl">Sistema</div>
+      <div class="nav-item" id="n-settings" onclick="show('settings',null)">
+        <svg class="nav-ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Configurações
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="av">FM</div>
+      <div><div class="u-name">Felipe M.</div><div class="u-role">Admin</div></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="navbar">
+      <span class="pg-title" id="pg-title">Dashboard</span>
+      <div class="srch-btn">🔍 Buscar… <kbd>⌘K</kbd></div>
+      <div class="ico-btn">🔔</div>
+      <select class="ws-sel"><option>Workspace Vendas</option></select>
+      <div class="av sm">FM</div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div id="sc-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div><div class="kpi-lbl">Total de Leads</div><div class="kpi-val">142</div><div class="kpi-trend b-blue" style="background:#EFF6FF;color:#1818EB">↑ 12% este mês</div></div>
+            <div class="kpi-ico ico-blue">👥</div>
+          </div>
+          <div class="kpi">
+            <div><div class="kpi-lbl">Reuniões Agendadas</div><div class="kpi-val">18</div><div class="kpi-trend" style="background:#DCFCE7;color:#16A34A">↑ 3 esta semana</div></div>
+            <div class="kpi-ico ico-green">📅</div>
+          </div>
+          <div class="kpi">
+            <div><div class="kpi-lbl">Tentando Contato</div><div class="kpi-val">34</div><div class="kpi-trend" style="background:#FEF9C3;color:#CA8A04">⏳ 8 há +3 dias</div></div>
+            <div class="kpi-ico ico-amber">📞</div>
+          </div>
+          <div class="kpi">
+            <div><div class="kpi-lbl">Mensagens IA Geradas</div><div class="kpi-val">289</div><div class="kpi-trend" style="background:#F3E8FF;color:#9333EA">✨ 47 esta semana</div></div>
+            <div class="kpi-ico ico-purple">✨</div>
+          </div>
+        </div>
+
+        <div class="chart-row">
+          <div class="card">
+            <div class="card-title">Leads por Etapa do Funil</div>
+            <div class="bar-chart">
+              <div class="bar-row"><span class="bar-lbl">Base</span><div class="bar-track"><div class="bar-fill" style="width:75%"><span class="bar-n">42</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Lead Mapeado</span><div class="bar-track"><div class="bar-fill" style="width:55%"><span class="bar-n">31</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Tentando Contato</span><div class="bar-track"><div class="bar-fill" style="width:60%"><span class="bar-n">34</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Conexão Iniciada</span><div class="bar-track"><div class="bar-fill" style="width:28%"><span class="bar-n">16</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Qualificado</span><div class="bar-track"><div class="bar-fill" style="width:20%"><span class="bar-n">11</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Reunião Agendada</span><div class="bar-track"><div class="bar-fill" style="width:32%"><span class="bar-n">18</span></div></div></div>
+              <div class="bar-row"><span class="bar-lbl">Desqualificado</span><div class="bar-track"><div class="bar-fill" style="width:18%;background:linear-gradient(90deg,#94A3B8,#CBD5E1)"><span class="bar-n">10</span></div></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Leads Criados por Semana</div>
+            <svg viewBox="0 0 310 130" width="100%" height="130" style="display:block">
+              <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1818EB" stop-opacity=".25"/><stop offset="100%" stop-color="#1818EB" stop-opacity="0"/></linearGradient></defs>
+              <line x1="0" y1="25" x2="310" y2="25" stroke="#E2E8F0" stroke-width="1"/>
+              <line x1="0" y1="50" x2="310" y2="50" stroke="#E2E8F0" stroke-width="1"/>
+              <line x1="0" y1="75" x2="310" y2="75" stroke="#E2E8F0" stroke-width="1"/>
+              <line x1="0" y1="100" x2="310" y2="100" stroke="#E2E8F0" stroke-width="1"/>
+              <path d="M0,88 C30,82 55,68 80,58 C110,46 130,72 155,62 C175,53 200,38 235,32 C255,28 280,44 310,28 L310,125 L0,125 Z" fill="url(#g1)"/>
+              <path d="M0,88 C30,82 55,68 80,58 C110,46 130,72 155,62 C175,53 200,38 235,32 C255,28 280,44 310,28" fill="none" stroke="#1818EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="0" cy="88" r="3.5" fill="#1818EB"/><circle cx="80" cy="58" r="3.5" fill="#1818EB"/><circle cx="155" cy="62" r="3.5" fill="#1818EB"/><circle cx="235" cy="32" r="3.5" fill="#1818EB"/><circle cx="310" cy="28" r="3.5" fill="#1818EB"/>
+              <text x="0" y="122" fill="#94A3B8" font-size="9">Sem 1</text><text x="74" y="122" fill="#94A3B8" font-size="9">Sem 3</text><text x="149" y="122" fill="#94A3B8" font-size="9">Sem 5</text><text x="228" y="122" fill="#94A3B8" font-size="9">Sem 7</text><text x="297" y="122" fill="#94A3B8" font-size="9">S8</text>
+            </svg>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Leads Recentes</div>
+          <table class="dt">
+            <thead><tr><th>Lead</th><th>Etapa</th><th>Responsável</th><th>Criado</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div class="lead-cell"><div class="av xs">AM</div><div><div class="l-name">Ana Martins</div><div class="l-co">TechCorp SA</div></div></div></td><td><span class="badge b-blue">Lead Mapeado</span></td><td><div class="lead-cell"><div class="av xs">FM</div> Felipe M.</div></td><td style="color:#94A3B8;font-size:10px">2h atrás</td><td><button class="btn-g">Ver →</button></td></tr>
+              <tr><td><div class="lead-cell"><div class="av xs" style="background:#16A34A">RC</div><div><div class="l-name">Ricardo Costa</div><div class="l-co">Nexus Ltda</div></div></div></td><td><span class="badge b-amber">Tentando Contato</span></td><td><div class="lead-cell"><div class="av xs">FM</div> Felipe M.</div></td><td style="color:#94A3B8;font-size:10px">5h atrás</td><td><button class="btn-g">Ver →</button></td></tr>
+              <tr><td><div class="lead-cell"><div class="av xs" style="background:#9333EA">JS</div><div><div class="l-name">Julia Santos</div><div class="l-co">Inovare</div></div></div></td><td><span class="badge b-green">Reunião Agendada</span></td><td><div class="lead-cell"><div class="av xs">FM</div> Felipe M.</div></td><td style="color:#94A3B8;font-size:10px">1 dia atrás</td><td><button class="btn-g">Ver →</button></td></tr>
+              <tr><td><div class="lead-cell"><div class="av xs" style="background:#D97706">MP</div><div><div class="l-name">Marcos Pinto</div><div class="l-co">Alfa Digital</div></div></div></td><td><span class="badge b-purple">Qualificado</span></td><td><div class="lead-cell"><div class="av xs">FM</div> Felipe M.</div></td><td style="color:#94A3B8;font-size:10px">2 dias</td><td><button class="btn-g">Ver →</button></td></tr>
+              <tr><td><div class="lead-cell"><div class="av xs" style="background:#64748B">LF</div><div><div class="l-name">Laura Ferreira</div><div class="l-co">Beta Systems</div></div></div></td><td><span class="badge b-slate">Base</span></td><td><div class="lead-cell"><div class="av xs">FM</div> Felipe M.</div></td><td style="color:#94A3B8;font-size:10px">3 dias</td><td><button class="btn-g">Ver →</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- KANBAN -->
+      <div id="sc-kanban" style="display:none">
+        <div class="kb-toolbar">
+          <input class="inp" style="width:190px" placeholder="🔍 Buscar nome ou empresa…"/>
+          <select class="sel"><option>Todas as etapas</option></select>
+          <select class="sel"><option>Todos responsáveis</option></select>
+          <button class="btn-p">＋ Novo Lead</button>
+        </div>
+        <div class="kb-board">
+          <div class="kb-col">
+            <div class="col-hd"><div class="col-title"><div class="cdot" style="background:#94A3B8"></div>Base</div><div class="col-cnt">2</div></div>
+            <div class="lcard"><div class="lc-name">Laura Ferreira</div><div class="lc-co">🏢 Beta Systems</div><div class="lc-foot"><span class="badge b-slate">LinkedIn</span><div class="av xs" style="background:#64748B">LF</div></div></div>
+            <div class="lcard"><div class="lc-name">Pedro Alves</div><div class="lc-co">🏢 CloudNet</div><div class="lc-foot"><span class="badge b-slate">Indicação</span><div class="av xs">FM</div></div></div>
+          </div>
+          <div class="kb-col">
+            <div class="col-hd"><div class="col-title"><div class="cdot" style="background:#3B82F6"></div>Lead Mapeado</div><div class="col-cnt">1</div></div>
+            <div class="lcard"><div class="lc-name">Ana Martins</div><div class="lc-co">🏢 TechCorp SA</div><div class="lc-foot"><span class="badge b-blue">Cold Email</span><div class="av xs">AM</div></div></div>
+          </div>
+          <div class="kb-col">
+            <div class="col-hd"><div class="col-title"><div class="cdot" style="background:#F59E0B"></div>Tentando Contato</div><div class="col-cnt">1</div></div>
+            <div class="lcard"><div class="lc-name">Ricardo Costa</div><div class="lc-co">🏢 Nexus Ltda</div><div class="lc-foot"><span class="badge b-amber">Outbound</span><div style="display:flex;align-items:center;gap:3px"><span style="font-size:10px">✨</span><div class="av xs" style="background:#16A34A">RC</div></div></div></div>
+          </div>
+          <div class="kb-col">
+            <div class="col-hd"><div class="col-title"><div class="cdot" style="background:#8B5CF6"></div>Qualificado</div><div class="col-cnt">1</div></div>
+            <div class="lcard"><div class="lc-name">Marcos Pinto</div><div class="lc-co">🏢 Alfa Digital</div><div class="lc-foot"><span class="badge b-purple">Evento</span><div style="display:flex;align-items:center;gap:3px"><span style="font-size:10px">✨</span><div class="av xs" style="background:#D97706">MP</div></div></div></div>
+          </div>
+          <div class="kb-col">
+            <div class="col-hd"><div class="col-title"><div class="cdot" style="background:#22C55E"></div>Reunião Agendada</div><div class="col-cnt">1</div></div>
+            <div class="lcard"><div class="lc-name">Julia Santos</div><div class="lc-co">🏢 Inovare</div><div class="lc-foot"><span class="badge b-green">Referral</span><div style="display:flex;align-items:center;gap:3px"><span style="font-size:10px">✨</span><div class="av xs" style="background:#9333EA">JS</div></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAMPAIGNS -->
+      <div id="sc-campaigns" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div><div style="font-size:14px;font-weight:600">Campanhas</div><div style="font-size:10px;color:#94A3B8;margin-top:2px">3 campanhas · 2 ativas</div></div>
+          <button class="btn-p">＋ Nova Campanha</button>
+        </div>
+        <div class="camp-grid">
+          <div class="camp-card">
+            <div class="camp-hd"><div class="camp-name">Prospecção Tech Q2</div><span class="badge b-green">● Ativa</span></div>
+            <div class="camp-ctx">Empresas de tecnologia 50-200 funcionários, foco em automação de processos internos...</div>
+            <div class="camp-meta">⚡ Gatilho: <strong>Lead Mapeado</strong></div>
+            <div class="msg-prev">Olá {nome}, vi que a {empresa} está crescendo no setor de tecnologia. Tenho uma solução que pode reduzir...</div>
+            <div class="camp-ft"><div style="display:flex;gap:5px"><button class="btn-g">✏️ Editar</button><button class="btn-g">✨ Gerar</button></div><div class="sw"><div class="sw-d"></div></div></div>
+          </div>
+          <div class="camp-card">
+            <div class="camp-hd"><div class="camp-name">Follow-up Qualificados</div><span class="badge b-green">● Ativa</span></div>
+            <div class="camp-ctx">Leads qualificados que precisam de um empurrão final para agendar reunião com nosso time...</div>
+            <div class="camp-meta">⚡ Gatilho: <strong>Qualificado</strong></div>
+            <div class="msg-prev">Oi {nome}! Na nossa última conversa você mencionou interesse em reduzir custos operacionais...</div>
+            <div class="camp-ft"><div style="display:flex;gap:5px"><button class="btn-g">✏️ Editar</button><button class="btn-g">✨ Gerar</button></div><div class="sw"><div class="sw-d"></div></div></div>
+          </div>
+          <div class="camp-card" style="opacity:.65">
+            <div class="camp-hd"><div class="camp-name">Cold Outreach Jan</div><span class="badge b-slate">● Inativa</span></div>
+            <div class="camp-ctx">Prospecção fria para empresas de varejo. Pausada para revisão de copy e estratégia...</div>
+            <div class="camp-meta">⚡ Gatilho: <strong>Nenhum</strong></div>
+            <div class="msg-prev">Bom dia {nome}, tudo bem? Identificamos que a {empresa} pode se beneficiar da nossa plataforma...</div>
+            <div class="camp-ft"><div style="display:flex;gap:5px"><button class="btn-g">✏️ Editar</button><button class="btn-g">✨ Gerar</button></div><div class="sw off"><div class="sw-d"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="sc-settings" style="display:none">
+        <div class="s-tabs">
+          <div class="s-tab active">Campos Personalizados</div>
+          <div class="s-tab">Etapas do Funil</div>
+          <div class="s-tab">Membros</div>
+          <div class="s-tab">Workspace</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div class="card-title" style="margin:0">Campos Personalizados</div>
+              <button class="btn-p" style="font-size:10px;padding:5px 10px">＋ Novo</button>
+            </div>
+            <div class="field-row"><div class="f-name">Tamanho da Empresa</div><span class="badge b-blue">texto</span><button class="btn-g" style="font-size:10px">✏️</button><button class="btn-g" style="font-size:10px;color:#EF4444">🗑</button></div>
+            <div class="field-row"><div class="f-name">Receita Anual (R$)</div><span class="badge b-green">número</span><button class="btn-g" style="font-size:10px">✏️</button><button class="btn-g" style="font-size:10px;color:#EF4444">🗑</button></div>
+            <div class="field-row"><div class="f-name">Setor de Atuação</div><span class="badge b-amber">select</span><button class="btn-g" style="font-size:10px">✏️</button><button class="btn-g" style="font-size:10px;color:#EF4444">🗑</button></div>
+            <div class="field-row"><div class="f-name">Stack Tecnológica</div><span class="badge b-blue">texto</span><button class="btn-g" style="font-size:10px">✏️</button><button class="btn-g" style="font-size:10px;color:#EF4444">🗑</button></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Etapas do Funil</div>
+            <div class="stage-row"><span class="grip">⠿</span><div class="color-dot" style="background:#94A3B8"></div><div class="s-name">Base</div></div>
+            <div class="stage-row"><span class="grip">⠿</span><div class="color-dot" style="background:#3B82F6"></div><div class="s-name">Lead Mapeado</div><span class="req-b">2 obrig.</span></div>
+            <div class="stage-row" style="border:2px solid #1818EB;background:#EFF6FF"><span class="grip">⠿</span><div class="color-dot" style="background:#F59E0B"></div><div class="s-name">Tentando Contato</div><span class="req-b">3 obrig.</span></div>
+            <div class="stage-row"><span class="grip">⠿</span><div class="color-dot" style="background:#06B6D4"></div><div class="s-name">Conexão Iniciada</div></div>
+            <div class="stage-row"><span class="grip">⠿</span><div class="color-dot" style="background:#8B5CF6"></div><div class="s-name">Qualificado</div><span class="req-b">4 obrig.</span></div>
+            <div class="stage-row"><span class="grip">⠿</span><div class="color-dot" style="background:#22C55E"></div><div class="s-name">Reunião Agendada</div></div>
+            <div style="margin-top:9px"><button class="btn-g" style="width:100%;text-align:center;padding:6px">＋ Nova Etapa</button></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const titles = { dashboard:'Dashboard', kanban:'Leads — Kanban', campaigns:'Campanhas', settings:'Configurações' };
+function show(name, tabEl) {
+  ['dashboard','kanban','campaigns','settings'].forEach(s => {
+    document.getElementById('sc-'+s).style.display = s===name ? '' : 'none';
+    document.getElementById('n-'+s).classList.toggle('active', s===name);
+  });
+  document.getElementById('pg-title').textContent = titles[name];
+  if(tabEl) {
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+  }
+}
+</script>
+</body>
+</html>

@@ -95,8 +95,13 @@ const SidebarContent = ({
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    isActive ? "sidebar-link-active" : "sidebar-link",
-                    compact && "justify-center px-0"
+                    compact
+                      ? isActive
+                        ? "sidebar-link-active-compact"
+                        : "sidebar-link-compact"
+                      : isActive
+                        ? "sidebar-link-active"
+                        : "sidebar-link"
                   )
                 }
               >

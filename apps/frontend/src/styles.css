@@ -124,11 +124,19 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-sidebar-text transition-colors hover:bg-white/5 hover:text-white;
+    @apply flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-sidebar-text transition-all duration-150 hover:bg-white/5 hover:text-white;
   }
 
   .sidebar-link-active {
-    @apply rounded-lg border-l-2 border-primary bg-sidebar-active px-4 py-2.5 text-sm font-semibold text-white;
+    @apply flex items-center gap-3 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)];
+  }
+
+  .sidebar-link-compact {
+    @apply flex items-center justify-center rounded-xl px-0 py-2.5 text-sidebar-text transition-all duration-150 hover:bg-white/5 hover:text-white;
+  }
+
+  .sidebar-link-active-compact {
+    @apply flex items-center justify-center rounded-xl bg-white/10 px-0 py-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)];
   }
 
   .status-badge {

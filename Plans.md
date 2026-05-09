@@ -141,7 +141,6 @@ Desenvolver um Mini CRM para equipes de SDR (Sales Development Representatives) 
 - [ ] 6.1 Deploy do frontend ( Netlify)
 - [ ] 6.2 Confirmar que o deploy estÃ¡ acessÃ­vel publicamente
 - [x] 6.3 Escrever README completo
-- [ ] 6.4 Gravar vÃ­deo de demonstraÃ§Ã£o (atÃ© 10 minutos)
 - [ ] 6.5 Commit: `docs: README final e link do vÃ­deo`
 
 ---

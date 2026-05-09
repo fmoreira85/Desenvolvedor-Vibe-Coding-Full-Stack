@@ -2,6 +2,10 @@
 
 Mini CRM para equipes de SDR com autenticacao, gestao de leads em kanban, campanhas de abordagem e geracao de mensagens com IA.
 
+## Link do Sistema
+
+- Producao: https://superb-cranachan-294219.netlify.app
+
 ## Visao Geral
 
 O projeto foi construido como monorepo TypeScript com frontend React/Vite e backend Node.js/Express. O fluxo cobre:
