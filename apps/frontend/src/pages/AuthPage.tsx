@@ -1,25 +1,114 @@
 import { Eye, EyeOff, KanbanSquare, Megaphone, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { authApi } from "../services/api/authApi";
 import { getApiErrorMessage } from "../services/api/client";
 import { useSessionStore } from "../hooks/useSessionStore";
+import { isSupabaseAuthEnabled } from "../services/supabase/client";
 
 export const AuthPage = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const setSession = useSessionStore((state) => state.setSession);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const handledCallbackRef = useRef<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: ""
   });
+
+  useEffect(() => {
+    if (!isSupabaseAuthEnabled()) {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(location.search);
+    const tokenHash = searchParams.get("token_hash");
+    const type = searchParams.get("type");
+    const errorDescription = searchParams.get("error_description");
+
+    if (!tokenHash && !errorDescription) {
+      return;
+    }
+
+    if (handledCallbackRef.current === location.search) {
+      return;
+    }
+
+    handledCallbackRef.current = location.search;
+
+    if (errorDescription) {
+      toast.error(errorDescription);
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    if (!type) {
+      toast.error("Nao foi possivel validar o link de confirmacao.");
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    if (!tokenHash) {
+      toast.error("Link de confirmacao invalido.");
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    let isMounted = true;
+
+    setSubmitting(true);
+
+    void authApi
+      .completeEmailConfirmation({
+        tokenHash,
+        type
+      })
+      .then((result) => {
+        if (!isMounted) {
+          return;
+        }
+
+        if (result.status === "authenticated") {
+          setSession(result.payload);
+          toast.success("Email confirmado. Login realizado com sucesso.");
+          navigate(result.payload.workspaces.length > 0 ? "/dashboard" : "/workspaces", { replace: true });
+          return;
+        }
+
+        setMode("login");
+        setForm((current) => ({
+          ...current,
+          password: ""
+        }));
+        toast.success("Email confirmado. Agora voce ja pode entrar.");
+        navigate(location.pathname, { replace: true });
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        toast.error(getApiErrorMessage(error));
+        navigate(location.pathname, { replace: true });
+      })
+      .finally(() => {
+        if (isMounted) {
+          setSubmitting(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname, location.search, navigate, setSession]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -126,18 +215,34 @@ export const AuthPage = () => {
                 onClick={async () => {
                   setSubmitting(true);
                   try {
-                    const payload =
-                      mode === "login"
-                        ? await authApi.login({ email: form.email, password: form.password })
-                        : await authApi.register({
-                            name: form.name,
-                            email: form.email,
-                            password: form.password
-                          });
+                    if (mode === "login") {
+                      const payload = await authApi.login({ email: form.email, password: form.password });
 
-                    setSession(payload);
-                    toast.success(mode === "login" ? "Login realizado." : "Conta criada com sucesso.");
-                    navigate(payload.workspaces.length > 0 ? "/dashboard" : "/workspaces");
+                      setSession(payload);
+                      toast.success("Login realizado.");
+                      navigate(payload.workspaces.length > 0 ? "/dashboard" : "/workspaces");
+                      return;
+                    }
+
+                    const result = await authApi.register({
+                      name: form.name,
+                      email: form.email,
+                      password: form.password
+                    });
+
+                    if (result.status === "authenticated") {
+                      setSession(result.payload);
+                      toast.success("Conta criada com sucesso.");
+                      navigate(result.payload.workspaces.length > 0 ? "/dashboard" : "/workspaces");
+                      return;
+                    }
+
+                    setMode("login");
+                    setForm((current) => ({
+                      ...current,
+                      password: ""
+                    }));
+                    toast.success("Conta criada. Confirme o email para liberar o login.");
                   } catch (error) {
                     toast.error(getApiErrorMessage(error));
                   } finally {

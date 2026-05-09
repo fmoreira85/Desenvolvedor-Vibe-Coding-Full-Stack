@@ -4,6 +4,11 @@ import { AppError } from "../errors/AppError";
 import { resolveAccessToken } from "../services/authService";
 
 export const authMiddleware = (request: Request, _response: Response, next: NextFunction) => {
+  if (request.method === "OPTIONS") {
+    next();
+    return;
+  }
+
   const authorizationHeader = request.headers.authorization;
 
   if (!authorizationHeader?.startsWith("Bearer ")) {

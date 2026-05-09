@@ -4,6 +4,28 @@ import type { AuthPayload } from "../../types/models";
 import { apiClient } from "./client";
 import { isSupabaseAuthEnabled, signOutSupabaseSession, supabase } from "../supabase/client";
 
+const DEFAULT_PRODUCTION_AUTH_REDIRECT_URL = "https://superb-cranachan-294219.netlify.app/login";
+const LOCAL_AUTH_REDIRECT_PATH = "/login";
+
+const getEmailRedirectUrl = () => {
+  const configuredRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
+
+  if (configuredRedirectUrl) {
+    return configuredRedirectUrl;
+  }
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const isLocalEnvironment = hostname === "localhost" || hostname === "127.0.0.1";
+
+    if (isLocalEnvironment) {
+      return `${window.location.origin}${LOCAL_AUTH_REDIRECT_PATH}`;
+    }
+  }
+
+  return DEFAULT_PRODUCTION_AUTH_REDIRECT_URL;
+};
+
 const buildSessionPayload = async (token: string) => {
   const { data } = await apiClient.get<AuthPayload>("/auth/session", {
     headers: {
@@ -25,17 +47,39 @@ const requireSupabaseSession = async (session: Session | null) => {
   return buildSessionPayload(session.access_token);
 };
 
+type RegisterResult =
+  | {
+      status: "authenticated";
+      payload: AuthPayload;
+    }
+  | {
+      status: "pending_email_confirmation";
+    };
+
+type EmailConfirmationResult =
+  | {
+      status: "authenticated";
+      payload: AuthPayload;
+    }
+  | {
+      status: "confirmed";
+    };
+
 export const authApi = {
   register: async (input: { name: string; email: string; password: string }) => {
     if (!isSupabaseAuthEnabled() || !supabase) {
       const { data } = await apiClient.post<AuthPayload>("/auth/register", input);
-      return data;
+      return {
+        status: "authenticated" as const,
+        payload: data
+      } satisfies RegisterResult;
     }
 
     const { data, error } = await supabase.auth.signUp({
       email: input.email,
       password: input.password,
       options: {
+        emailRedirectTo: getEmailRedirectUrl(),
         data: {
           name: input.name
         }
@@ -46,7 +90,16 @@ export const authApi = {
       throw error;
     }
 
-    return requireSupabaseSession(data.session);
+    if (!data.session?.access_token) {
+      return {
+        status: "pending_email_confirmation"
+      } satisfies RegisterResult;
+    }
+
+    return {
+      status: "authenticated" as const,
+      payload: await buildSessionPayload(data.session.access_token)
+    } satisfies RegisterResult;
   },
   login: async (input: { email: string; password: string }) => {
     if (!isSupabaseAuthEnabled() || !supabase) {
@@ -81,6 +134,33 @@ export const authApi = {
     }
 
     return buildSessionPayload(data.session.access_token);
+  },
+  completeEmailConfirmation: async (input: { tokenHash: string; type: string }) => {
+    if (!isSupabaseAuthEnabled() || !supabase) {
+      return {
+        status: "confirmed"
+      } satisfies EmailConfirmationResult;
+    }
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: input.tokenHash,
+      type: input.type
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data.session?.access_token) {
+      return {
+        status: "confirmed"
+      } satisfies EmailConfirmationResult;
+    }
+
+    return {
+      status: "authenticated" as const,
+      payload: await buildSessionPayload(data.session.access_token)
+    } satisfies EmailConfirmationResult;
   },
   onSessionChange: (callback: (payload: AuthPayload | null) => void) => {
     if (!isSupabaseAuthEnabled() || !supabase) {

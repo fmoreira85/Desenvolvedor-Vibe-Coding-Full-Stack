@@ -8,6 +8,8 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: parsePort(process.env.PORT, 3001),
   jwtSecret: process.env.JWT_SECRET ?? "change-me-in-development",
+  frontendUrl: process.env.FRONTEND_URL ?? "",
+  corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS ?? "",
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",

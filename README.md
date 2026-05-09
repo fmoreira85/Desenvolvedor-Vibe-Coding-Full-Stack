@@ -87,6 +87,8 @@ DATABASE_URL=postgresql://sdrcrm:sdrcrm123@postgres:5432/sdrcrm
 PORT=3001
 JWT_SECRET=change-me-in-development
 NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://superb-cranachan-294219.netlify.app
 
 # IA
 ANTHROPIC_API_KEY=
@@ -98,6 +100,7 @@ OPENAI_MODEL=gpt-4o-mini
 VITE_API_URL=http://localhost:3001
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
+VITE_AUTH_REDIRECT_URL=
 
 # Supabase
 SUPABASE_URL=
@@ -120,6 +123,8 @@ cp .env.example .env
 ```
 
 Preencha as chaves opcionais de IA e, se estiver usando a fase com Supabase, configure as credenciais correspondentes.
+
+Se quiser sobrescrever o destino do link de confirmacao do Supabase no frontend, defina `VITE_AUTH_REDIRECT_URL`. Quando essa variavel nao estiver preenchida, o app usa `http://localhost:5173/login` em ambiente local e `https://superb-cranachan-294219.netlify.app/login` como fallback de producao.
 
 ### 3. Subir com Docker
 
@@ -175,6 +180,8 @@ npm run preview --workspace apps/frontend
 
 O repositorio ja esta preparado com `netlify.toml` para build de SPA React.
 
+Guia completo passo a passo: [DEPLOY_NETLIFY.md](DEPLOY_NETLIFY.md)
+
 ### Configuracao recomendada
 
 - Build command: `npm run build --workspace apps/frontend`
@@ -183,15 +190,26 @@ O repositorio ja esta preparado com `netlify.toml` para build de SPA React.
 
 ### Variaveis necessarias no Netlify
 
-- `VITE_API_URL`
+- `VITE_API_URL=https://sdr-crmbackend-production.up.railway.app`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_AUTH_REDIRECT_URL=https://superb-cranachan-294219.netlify.app/login`
 
 ### Observacoes importantes
 
 - O frontend usa React Router com `BrowserRouter`, entao o deploy precisa de fallback para `index.html`.
 - O app continua dependendo de um backend publico acessivel em `VITE_API_URL`.
 - Nenhuma chave sensivel deve ser exposta no frontend. Apenas variaveis `VITE_*` seguras para cliente.
+- No painel do Supabase Auth, configure `Site URL` como `https://superb-cranachan-294219.netlify.app`.
+- Em `Redirect URLs`, inclua pelo menos `https://superb-cranachan-294219.netlify.app/login` e `http://localhost:5173/login`.
+- O frontend aceita `/auth` e `/login`, mas o fluxo de confirmacao por email foi padronizado para `/login`.
+- Se `VITE_API_URL` ficar vazio no deploy, o frontend pode cair para uma URL relativa. Configure explicitamente a URL publica do Railway no Netlify.
+
+## Configuracao de CORS no Railway
+
+- Defina `FRONTEND_URL=https://superb-cranachan-294219.netlify.app`.
+- Defina `CORS_ALLOWED_ORIGINS=http://localhost:5173,https://superb-cranachan-294219.netlify.app`.
+- O backend responde preflight `OPTIONS` com suporte a `Authorization`, `Content-Type` e `credentials`.
 
 ## Endpoints Principais
 

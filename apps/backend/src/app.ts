@@ -3,6 +3,7 @@ import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 
+import { corsOptions } from "./config/cors";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { apiRouter } from "./routes";
 
@@ -10,7 +11,8 @@ export const createApp = () => {
   const app = express();
 
   app.use(helmet());
-  app.use(cors());
+  app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions));
   app.use(morgan("dev"));
   app.use(express.json());
 

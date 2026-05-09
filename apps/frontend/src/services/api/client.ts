@@ -3,8 +3,29 @@ import axios from "axios";
 import { useSessionStore } from "../../hooks/useSessionStore";
 import { signOutSupabaseSession } from "../supabase/client";
 
+const DEFAULT_PRODUCTION_API_URL = "https://sdr-crmbackend-production.up.railway.app";
+const DEFAULT_LOCAL_API_URL = "http://localhost:3001";
+
+const resolveApiUrl = () => {
+  const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+
+  if (configuredApiUrl) {
+    return configuredApiUrl;
+  }
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const isLocalEnvironment = hostname === "localhost" || hostname === "127.0.0.1";
+
+    return isLocalEnvironment ? DEFAULT_LOCAL_API_URL : DEFAULT_PRODUCTION_API_URL;
+  }
+
+  return DEFAULT_LOCAL_API_URL;
+};
+
 export const apiClient = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL ?? "http://localhost:3001"}/api`
+  baseURL: `${resolveApiUrl()}/api`,
+  withCredentials: true
 });
 
 apiClient.interceptors.request.use((config) => {

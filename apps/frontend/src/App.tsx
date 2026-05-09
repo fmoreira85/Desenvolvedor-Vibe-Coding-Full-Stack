@@ -11,17 +11,17 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
 export default function App() {
+  const authPage = (
+    <RouteGuards.PublicOnly>
+      <AuthPage />
+    </RouteGuards.PublicOnly>
+  );
+
   return (
     <SessionBootstrap>
       <Routes>
-        <Route
-          path="/auth"
-          element={
-            <RouteGuards.PublicOnly>
-              <AuthPage />
-            </RouteGuards.PublicOnly>
-          }
-        />
+        <Route path="/auth" element={authPage} />
+        <Route path="/login" element={authPage} />
 
         <Route
           path="/workspaces"
